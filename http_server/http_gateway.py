@@ -46,46 +46,46 @@ def test_grpc_connection():
     """测试gRPC连接并返回详细信息"""
     for server in GRPC_SERVERS:
         try:
-            logger.info(f"🔍 Trying to connect to {server}...")
+            logger.info(f"Trying to connect to {server}...")
             channel = grpc.insecure_channel(server)
             
             try:
                 grpc.channel_ready_future(channel).result(timeout=3)
-                logger.info(f"✅ gRPC channel connected to {server}")
+                logger.info(f"gRPC channel connected to {server}")
                 return channel, server
             except grpc.FutureTimeoutError:
-                logger.warning(f"⏰ gRPC connection timeout to {server}")
+                logger.warning(f"gRPC connection timeout to {server}")
                 channel.close()
                 continue
             except Exception as e:
-                logger.warning(f"⚠️ gRPC connection failed to {server}: {e}")
+                logger.warning(f"gRPC connection failed to {server}: {e}")
                 channel.close()
                 continue
                 
         except Exception as e:
-            logger.warning(f"⚠️ Failed to create gRPC channel to {server}: {e}")
+            logger.warning(f"Failed to create gRPC channel to {server}: {e}")
             continue
     
-    logger.error("❌ All gRPC connection attempts failed")
+    logger.error("All gRPC connection attempts failed")
     return None, None
 
 def get_grpc_stub():
     """获取gRPC Stub"""
     if channel is None:
-        logger.error("❌ Cannot create stub: no gRPC channel")
+        logger.error("Cannot create stub: no gRPC channel")
         return None
     
     try:
         # 根据测试文件，应该使用RoomStub
         if hasattr(room_pb2_grpc, 'RoomStub'):
             stub = room_pb2_grpc.RoomStub(channel)
-            logger.info("✅ Using gRPC stub: RoomStub")
+            logger.info("Using gRPC stub: RoomStub")
             return stub
         else:
-            logger.error("❌ RoomStub not found in room_pb2_grpc")
+            logger.error("RoomStub not found in room_pb2_grpc")
             return None
     except Exception as e:
-        logger.error(f"❌ Error creating gRPC stub: {e}")
+        logger.error(f"Error creating gRPC stub: {e}")
         return None
 
 # 创建连接
