@@ -4,9 +4,14 @@ peewee==3.17.0
 pydantic==2.4.0
 
 # gRPC依赖 - 兼容版本组合
-grpcio==1.56.2
-grpcio-tools==1.56.2
-protobuf==4.24.4
+grpcio==1.74.0
+grpcio-tools==1.74.0
+protobuf==6.31.0
+
+# HTTP Gateway 依赖
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+httpx==0.25.2
 
 # 开发依赖
 pytest==7.4.3
