@@ -91,7 +91,7 @@ class InterviewRoomDO(DbModel):
 
     # 外键关系
     resumeId = CharField(null=False, max_length=36, column_name="resume_id")  # 简历ID
-    jobInfoId = CharField(null=True, max_length=36, column_name="job_info_id")  # 职位信息ID
+    jobInfoId = CharField(null=False, max_length=36, column_name="job_info_id")  # 职位信息ID
 
     createdAt = CharField(null=False, column_name="created_at", max_length=64)  # 创建时间
     updatedAt = CharField(null=False, column_name="updated_at", max_length=64)  # 更新时间

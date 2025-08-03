@@ -7,6 +7,7 @@ from typing import Optional, List
 import yeying.api.interviewer.room_pb2 as room_pb2
 import yeying.api.common.message_pb2 as message_pb2
 from interviewer.domain.model.room import Room
+from interviewer.domain.mapper.entities import InterviewRoomDO
 
 
 def convertRoomFrom(room: Room) -> room_pb2.RoomMetadata:
@@ -19,7 +20,7 @@ def convertRoomFrom(room: Room) -> room_pb2.RoomMetadata:
         did=room.did,
         roomName=room.roomName,
         resumeId=room.resumeId,
-        jobInfoId=room.jobInfoId or "",
+        jobInfoId=room.jobInfoId,
         contextId=room.contextId,
         experienceId=room.experienceId,
         knowledgeId=room.knowledgeId,
@@ -39,7 +40,7 @@ def convertRoomTo(room_metadata: room_pb2.RoomMetadata) -> Room:
         did=room_metadata.did,
         roomName=room_metadata.roomName,
         resumeId=room_metadata.resumeId,
-        jobInfoId=room_metadata.jobInfoId if room_metadata.jobInfoId else None,
+        jobInfoId=room_metadata.jobInfoId,
         contextId=room_metadata.contextId,
         experienceId=room_metadata.experienceId,
         knowledgeId=room_metadata.knowledgeId,
@@ -61,16 +62,35 @@ def createResponseStatus(code: int, message: str = "") -> message_pb2.ResponseSt
     return message_pb2.ResponseStatus(code=code, message=message)
 
 
-def createRoomFromUpdateRequest(request: room_pb2.UpdateRoomRequest) -> Room:
-    """从更新请求创建Room对象"""
-    body = request.body
+def convertRoomFromDO(room_do: InterviewRoomDO) -> Room:
+    """从数据库实体转换为领域模型"""
     return Room(
-        roomId=body.roomId,
-        did=body.did,
-        roomName=body.roomName,
-        resumeId="",  # 更新时不改变resumeId
-        jobInfoId=body.jobInfoId if body.jobInfoId else None,
-        contextId=body.contextId,
-        experienceId=body.experienceId,
-        knowledgeId=body.knowledgeId
+        roomId=room_do.roomId,
+        did=room_do.did,
+        roomName=room_do.roomName,
+        resumeId=room_do.resumeId,
+        jobInfoId=room_do.jobInfoId,
+        contextId=room_do.contextId,
+        experienceId=room_do.experienceId,
+        knowledgeId=room_do.knowledgeId,
+        createdAt=room_do.createdAt,
+        updatedAt=room_do.updatedAt,
+        signature=room_do.signature
+    )
+
+
+def convertRoomToDO(room: Room) -> InterviewRoomDO:
+    """从领域模型转换为数据库实体"""
+    return InterviewRoomDO(
+        roomId=room.roomId,
+        did=room.did,
+        roomName=room.roomName,
+        resumeId=room.resumeId,
+        jobInfoId=room.jobInfoId,
+        contextId=room.contextId,
+        experienceId=room.experienceId,
+        knowledgeId=room.knowledgeId,
+        createdAt=room.createdAt,
+        updatedAt=room.updatedAt,
+        signature=room.signature
     )

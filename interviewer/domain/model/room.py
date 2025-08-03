@@ -19,7 +19,7 @@ class Room:
     contextId: str
     experienceId: str
     knowledgeId: str
-    jobInfoId: Optional[str] = None
+    jobInfoId: str
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
     signature: Optional[str] = None
@@ -40,6 +40,9 @@ class Room:
 
         if not self.resumeId or not self.resumeId.strip():
             errors.append("resumeId不能为空")
+
+        if not self.jobInfoId or not self.jobInfoId.strip():
+            errors.append("jobInfoId不能为空")
 
         # 验证必填的知识库ID
         if not self.contextId or not self.contextId.strip():
@@ -64,26 +67,12 @@ class Room:
         """检查房间是否属于指定用户"""
         return self.did == did
 
-    def update_basic_info(self, room_name: str, job_info_id: Optional[str] = None) -> None:
-        """更新房间基本信息"""
+    def update_basic_info(self, room_name: str) -> None:
+        """更新房间基本信息（只允许修改房间名称）"""
         if not room_name or not room_name.strip():
             raise ValueError("房间名称不能为空")
 
         self.roomName = room_name.strip()
-        self.jobInfoId = job_info_id
-
-    def update_knowledge_ids(self, context_id: str, experience_id: str, knowledge_id: str) -> None:
-        """更新知识库ID"""
-        if not context_id or not context_id.strip():
-            raise ValueError("contextId不能为空")
-        if not experience_id or not experience_id.strip():
-            raise ValueError("experienceId不能为空")
-        if not knowledge_id or not knowledge_id.strip():
-            raise ValueError("knowledgeId不能为空")
-
-        self.contextId = context_id
-        self.experienceId = experience_id
-        self.knowledgeId = knowledge_id
 
     def __eq__(self, other) -> bool:
         """比较两个房间是否相等"""

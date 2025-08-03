@@ -15,7 +15,7 @@ from interviewer.infrastructure.repository.room_repository import RoomRepository
 from interviewer.infrastructure.db.instance import Instance
 from interviewer.application.model.room_dto import (
     convertRoomFrom, convertRoomTo, convertRoomListFrom,
-    createResponseStatus, createRoomFromUpdateRequest
+    createResponseStatus
 )
 from interviewer.tool.date import getCurrentUtcString
 
@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 class RoomService:
     """面试间服务"""
 
-    def __init__(self, db_instance: Instance):
+    def __init__(self, authenticate, db_instance: Instance):
+        self.authenticate = authenticate
         self.repository = RoomRepository(db_instance)
 
     # ========== gRPC接口实现 ==========
@@ -104,7 +105,7 @@ class RoomService:
             )
 
     def Update(self, request: room_pb2.UpdateRoomRequest, context) -> room_pb2.UpdateRoomResponse:
-        """更新面试间"""
+        """更新面试间（只允许修改房间名称）"""
         try:
             # 先获取现有房间
             existing_room = self.repository.get_by_id(request.body.did, request.body.roomId)
@@ -116,12 +117,8 @@ class RoomService:
                     )
                 )
 
-            # 更新字段
+            # 只更新房间名称
             existing_room.roomName = request.body.roomName
-            existing_room.jobInfoId = request.body.jobInfoId if request.body.jobInfoId else None
-            existing_room.contextId = request.body.contextId
-            existing_room.experienceId = request.body.experienceId
-            existing_room.knowledgeId = request.body.knowledgeId
             existing_room.updatedAt = getCurrentUtcString()
 
             # 验证更新后的数据
@@ -216,28 +213,20 @@ class RoomService:
                 )
             )
 
-    # ========== 内部方法 (用于测试) ==========
-
+    # ========== 测试辅助方法 ==========
+    
     def addRoom(self, room: Room) -> None:
-        """添加面试间 (内部方法)"""
+        """添加面试间 (测试辅助方法)"""
         self.repository.add(room)
 
     def getRoom(self, did: str, room_id: str) -> Optional[Room]:
-        """获取面试间 (内部方法)"""
+        """获取面试间 (测试辅助方法)"""
         return self.repository.get_by_id(did, room_id)
 
     def getRoomsByDid(self, did: str) -> List[Room]:
-        """获取用户所有面试间 (内部方法)"""
+        """获取用户所有面试间 (测试辅助方法)"""
         return self.repository.get_by_did(did)
 
-    def listRoomsByDid(self, did: str, page: int, page_size: int) -> Tuple[List[Room], int]:
-        """分页获取面试间 (内部方法)"""
-        return self.repository.list_by_did(did, page, page_size)
-
-    def updateRoom(self, room: Room) -> None:
-        """更新面试间 (内部方法)"""
-        self.repository.update(room)
-
     def deleteRoom(self, did: str, room_id: str) -> bool:
-        """删除面试间 (内部方法)"""
+        """删除面试间 (测试辅助方法)"""
         return self.repository.delete(did, room_id)

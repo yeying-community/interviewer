@@ -7,6 +7,7 @@ from typing import Optional, List, Tuple
 from interviewer.domain.model.room import Room
 from interviewer.domain.mapper.entities import InterviewRoomDO
 from interviewer.infrastructure.db.instance import Instance
+from interviewer.application.model.room_dto import convertRoomFromDO, convertRoomToDO
 
 
 class RoomRepository:
@@ -17,7 +18,7 @@ class RoomRepository:
 
     def add(self, room: Room) -> None:
         """添加面试间"""
-        room_do = self._to_do(room)
+        room_do = convertRoomToDO(room)
         try:
             with self.db_instance.database.atomic():
                 room_do.save(force_insert=True)
@@ -31,14 +32,14 @@ class RoomRepository:
                 (InterviewRoomDO.roomId == room_id) &
                 (InterviewRoomDO.did == did)
             )
-            return self._to_domain(room_do)
+            return convertRoomFromDO(room_do)
         except InterviewRoomDO.DoesNotExist:
             return None
 
     def get_by_did(self, did: str) -> List[Room]:
         """获取用户的所有面试间"""
         room_dos = InterviewRoomDO.select().where(InterviewRoomDO.did == did)
-        return [self._to_domain(room_do) for room_do in room_dos]
+        return [convertRoomFromDO(room_do) for room_do in room_dos]
 
     def list_by_did(self, did: str, page: int, page_size: int) -> Tuple[List[Room], int]:
         """分页获取用户的面试间"""
@@ -54,11 +55,11 @@ class RoomRepository:
                     .offset(offset)
                     .limit(page_size))
 
-        rooms = [self._to_domain(room_do) for room_do in room_dos]
+        rooms = [convertRoomFromDO(room_do) for room_do in room_dos]
         return rooms, total
 
     def update(self, room: Room) -> None:
-        """更新面试间"""
+        """更新面试间（只允许修改房间名称）"""
         try:
             with self.db_instance.database.atomic():
                 # 先查询确保记录存在且属于该用户
@@ -67,13 +68,9 @@ class RoomRepository:
                     (InterviewRoomDO.did == room.did)
                 )
 
-                # 更新字段
+                # 只更新房间名称和时间戳
                 update_fields = {
                     'roomName': room.roomName,
-                    'jobInfoId': room.jobInfoId,
-                    'contextId': room.contextId,
-                    'experienceId': room.experienceId,
-                    'knowledgeId': room.knowledgeId,
                     'updatedAt': room.updatedAt,
                     'signature': room.signature
                 }
@@ -100,35 +97,3 @@ class RoomRepository:
                 return deleted_count > 0
         except Exception as e:
             raise RuntimeError(f"删除面试间失败: {str(e)}")
-
-    def _to_domain(self, room_do: InterviewRoomDO) -> Room:
-        """DO实体转换为领域模型"""
-        return Room(
-            roomId=room_do.roomId,
-            did=room_do.did,
-            roomName=room_do.roomName,
-            resumeId=room_do.resumeId,
-            jobInfoId=room_do.jobInfoId,
-            contextId=room_do.contextId,
-            experienceId=room_do.experienceId,
-            knowledgeId=room_do.knowledgeId,
-            createdAt=room_do.createdAt,
-            updatedAt=room_do.updatedAt,
-            signature=room_do.signature
-        )
-
-    def _to_do(self, room: Room) -> InterviewRoomDO:
-        """领域模型转换为DO实体"""
-        return InterviewRoomDO(
-            roomId=room.roomId,
-            did=room.did,
-            roomName=room.roomName,
-            resumeId=room.resumeId,
-            jobInfoId=room.jobInfoId,
-            contextId=room.contextId,
-            experienceId=room.experienceId,
-            knowledgeId=room.knowledgeId,
-            createdAt=room.createdAt,
-            updatedAt=room.updatedAt,
-            signature=room.signature
-        )

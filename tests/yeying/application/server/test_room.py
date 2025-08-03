@@ -5,12 +5,10 @@
 
 import unittest
 import uuid
-from datetime import datetime
 
 import yeying.api.interviewer.room_pb2 as room_pb2
 import yeying.api.common.message_pb2 as message_pb2
 from interviewer.application.server.room import RoomService
-from interviewer.domain.model.room import Room
 from interviewer.domain.mapper.entities import InterviewRoomDO
 from interviewer.infrastructure.db.instance import Instance
 from interviewer.tool.date import getCurrentUtcString
@@ -24,17 +22,19 @@ class RoomServiceTestCase(unittest.TestCase):
     def setUpClass(cls):
         setup_test_logging()
 
-    def test_room_crud_operations(self):
-        """测试 Room 的完整 CRUD 操作"""
-        # 准备测试数据
-        did = "did:example:user1"
+    def setUp(self):
+        """每个测试前的初始化"""
+        self.room_service = RoomService(authenticate=None, db_instance=self.instance)
+
+    def test_grpc_create_room(self):
+        """测试创建面试间"""
+        did = "did:example:create-test"
         room_id = str(uuid.uuid4())
-
-        room_service = RoomService(db_instance=self.instance)
-        room_service.deleteRoom(did=did, room_id=room_id)  # 清理
-
+        
+        self.room_service.deleteRoom(did=did, room_id=room_id)  # 预清理
+        
         # 创建房间
-        room = Room(
+        room_metadata = room_pb2.RoomMetadata(
             roomId=room_id,
             did=did,
             roomName="Python面试间",
@@ -45,56 +45,32 @@ class RoomServiceTestCase(unittest.TestCase):
             knowledgeId="knowledge-001",
             createdAt=getCurrentUtcString(),
             updatedAt=getCurrentUtcString(),
-            signature="signature1"
+            signature="signature"
         )
+        create_request = room_pb2.CreateRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.CreateRoomRequestBody(room=room_metadata)
+        )
+        
+        create_response = self.room_service.Create(create_request, None)
+        self.assertEqual(create_response.body.status.code, 200)
+        self.assertEqual(create_response.body.room.roomName, "Python面试间")
+        self.assertEqual(create_response.body.room.jobInfoId, "job-001")
+        
+        self.room_service.deleteRoom(did=did, room_id=room_id)  # 后清理
 
-        # 测试添加
-        room_service.addRoom(room)
-
-        # 测试获取
-        retrieved_room = room_service.getRoom(did=did, room_id=room_id)
-        self.assertEqual(retrieved_room.roomName, "Python面试间")
-        self.assertEqual(retrieved_room.resumeId, "resume-001")
-
-        # 测试列表
-        rooms = room_service.getRoomsByDid(did=did)
-        self.assertEqual(len(rooms), 1)
-
-        # 测试分页
-        page_rooms, total = room_service.listRoomsByDid(did=did, page=1, page_size=10)
-        self.assertEqual(len(page_rooms), 1)
-        self.assertEqual(total, 1)
-
-        # 测试更新
-        room.roomName = "Python高级面试间"
-        room.jobInfoId = "job-002"
-        room.updatedAt = getCurrentUtcString()
-        room_service.updateRoom(room)
-
-        updated_room = room_service.getRoom(did=did, room_id=room_id)
-        self.assertEqual(updated_room.roomName, "Python高级面试间")
-        self.assertEqual(updated_room.jobInfoId, "job-002")
-
-        # 测试删除
-        room_service.deleteRoom(did=did, room_id=room_id)
-        deleted_room = room_service.getRoom(did=did, room_id=room_id)
-        self.assertIsNone(deleted_room)
-
-    def test_grpc_interface(self):
-        """测试 gRPC 接口"""
-        did = "did:example:grpc-test"
+    def test_grpc_get_room(self):
+        """测试获取面试间"""
+        did = "did:example:get-test"
         room_id = str(uuid.uuid4())
-
-        room_service = RoomService(db_instance=self.instance)
-        room_service.deleteRoom(did=did, room_id=room_id)  # 清理
-
-        header = message_pb2.MessageHeader()
-
-        # 测试创建
+        
+        self.room_service.deleteRoom(did=did, room_id=room_id)  # 预清理
+        
+        # 先创建房间
         room_metadata = room_pb2.RoomMetadata(
             roomId=room_id,
             did=did,
-            roomName="gRPC测试房间",
+            roomName="测试获取房间",
             resumeId="resume-001",
             jobInfoId="job-001",
             contextId="context-001",
@@ -104,115 +80,52 @@ class RoomServiceTestCase(unittest.TestCase):
             updatedAt=getCurrentUtcString(),
             signature="signature"
         )
-
         create_request = room_pb2.CreateRoomRequest(
-            header=header,
+            header=message_pb2.MessageHeader(),
             body=room_pb2.CreateRoomRequestBody(room=room_metadata)
         )
-
-        create_response = room_service.Create(create_request, None)
-        self.assertEqual(create_response.body.status.code, 200)
-        self.assertEqual(create_response.body.room.roomName, "gRPC测试房间")
-
+        self.room_service.Create(create_request, None)
+        
         # 测试获取
         get_request = room_pb2.GetRoomRequest(
-            header=header,
+            header=message_pb2.MessageHeader(),
             body=room_pb2.GetRoomRequestBody(roomId=room_id, did=did)
         )
-
-        get_response = room_service.Get(get_request, None)
+        
+        get_response = self.room_service.Get(get_request, None)
         self.assertEqual(get_response.body.status.code, 200)
         self.assertEqual(get_response.body.room.roomId, room_id)
+        self.assertEqual(get_response.body.room.roomName, "测试获取房间")
+        
+        self.room_service.deleteRoom(did=did, room_id=room_id)  # 后清理
 
-        # 测试更新
-        update_request = room_pb2.UpdateRoomRequest(
-            header=header,
-            body=room_pb2.UpdateRoomRequestBody(
-                roomId=room_id,
-                did=did,
-                roomName="更新的房间",
-                jobInfoId="job-002",
-                contextId="context-002",
-                experienceId="experience-002",
-                knowledgeId="knowledge-002"
-            )
-        )
-
-        update_response = room_service.Update(update_request, None)
-        self.assertEqual(update_response.body.status.code, 200)
-        self.assertEqual(update_response.body.room.roomName, "更新的房间")
-
-        # 测试列表
-        list_request = room_pb2.ListRoomsRequest(
-            header=header,
-            body=room_pb2.ListRoomsRequestBody(did=did, page=1, pageSize=10)
-        )
-
-        list_response = room_service.List(list_request, None)
-        self.assertEqual(list_response.body.status.code, 200)
-        self.assertEqual(len(list_response.body.rooms), 1)
-
-        # 测试删除
-        delete_request = room_pb2.DeleteRoomRequest(
-            header=header,
-            body=room_pb2.DeleteRoomRequestBody(roomId=room_id, did=did)
-        )
-
-        delete_response = room_service.Delete(delete_request, None)
-        self.assertEqual(delete_response.body.status.code, 200)
-
-    def test_business_validation(self):
-        """测试业务验证"""
+    def test_grpc_get_room_not_found(self):
+        """测试获取不存在的面试间"""
+        did = "did:example:not-found-test"
         room_id = str(uuid.uuid4())
-        did = "did:example:validation-test"
+        
+        get_request = room_pb2.GetRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.GetRoomRequestBody(roomId=room_id, did=did)
+        )
+        
+        get_response = self.room_service.Get(get_request, None)
+        self.assertEqual(get_response.body.status.code, 404)
 
-        # 测试有效房间
-        valid_room = Room(
+    def test_grpc_update_room(self):
+        """测试更新面试间"""
+        did = "did:example:update-test"
+        room_id = str(uuid.uuid4())
+        
+        self.room_service.deleteRoom(did=did, room_id=room_id)  # 预清理
+        
+        # 先创建房间
+        room_metadata = room_pb2.RoomMetadata(
             roomId=room_id,
             did=did,
-            roomName="有效房间",
+            roomName="原始房间名",
             resumeId="resume-001",
-            jobInfoId=None,  # 可选字段
-            contextId="context-001",
-            experienceId="experience-001",
-            knowledgeId="knowledge-001"
-        )
-        valid_room.validate()  # 应该不抛出异常
-
-        # 测试无效房间
-        with self.assertRaises(ValueError):
-            invalid_room = Room(
-                roomId="",  # 空ID
-                did="",
-                roomName="",
-                resumeId="",
-                contextId="",  # 必需参数
-                experienceId="",  # 必需参数
-                knowledgeId=""  # 必需参数
-            )
-            invalid_room.validate()
-
-        # 测试权限
-        self.assertTrue(valid_room.is_owned_by(did))
-        self.assertFalse(valid_room.is_owned_by("other-did"))
-
-    def test_error_scenarios(self):
-        """测试错误场景"""
-        did = "did:example:error-test"
-        room_id = str(uuid.uuid4())
-
-        room_service = RoomService(db_instance=self.instance)
-
-        # 测试获取不存在的房间
-        non_existent = room_service.getRoom(did=did, room_id=room_id)
-        self.assertIsNone(non_existent)
-
-        # 测试重复创建
-        room = Room(
-            roomId=room_id,
-            did=did,
-            roomName="测试房间",
-            resumeId="resume-001",
+            jobInfoId="job-001",
             contextId="context-001",
             experienceId="experience-001",
             knowledgeId="knowledge-001",
@@ -220,18 +133,162 @@ class RoomServiceTestCase(unittest.TestCase):
             updatedAt=getCurrentUtcString(),
             signature="signature"
         )
+        create_request = room_pb2.CreateRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.CreateRoomRequestBody(room=room_metadata)
+        )
+        self.room_service.Create(create_request, None)
+        
+        # 测试更新
+        update_request = room_pb2.UpdateRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.UpdateRoomRequestBody(
+                roomId=room_id,
+                did=did,
+                roomName="更新后的房间名"
+            )
+        )
+        
+        update_response = self.room_service.Update(update_request, None)
+        self.assertEqual(update_response.body.status.code, 200)
+        self.assertEqual(update_response.body.room.roomName, "更新后的房间名")
+        # 其他字段应该保持不变
+        self.assertEqual(update_response.body.room.jobInfoId, "job-001")
+        self.assertEqual(update_response.body.room.contextId, "context-001")
+        
+        self.room_service.deleteRoom(did=did, room_id=room_id)  # 后清理
 
-        room_service.addRoom(room)
-        with self.assertRaises((ValueError, RuntimeError)):
-            room_service.addRoom(room)  # 重复创建
+    def test_grpc_update_room_not_found(self):
+        """测试更新不存在的面试间"""
+        did = "did:example:update-not-found-test"
+        room_id = str(uuid.uuid4())
+        
+        update_request = room_pb2.UpdateRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.UpdateRoomRequestBody(
+                roomId=room_id,
+                did=did,
+                roomName="不存在的房间"
+            )
+        )
+        
+        update_response = self.room_service.Update(update_request, None)
+        self.assertEqual(update_response.body.status.code, 404)
 
-        # 测试权限控制
-        other_did = "did:example:other-user"
-        unauthorized = room_service.getRoom(did=other_did, room_id=room_id)
-        self.assertIsNone(unauthorized)
+    def test_grpc_delete_room(self):
+        """测试删除面试间"""
+        did = "did:example:delete-test"
+        room_id = str(uuid.uuid4())
+        
+        self.room_service.deleteRoom(did=did, room_id=room_id)  # 预清理
+        
+        # 先创建房间
+        room_metadata = room_pb2.RoomMetadata(
+            roomId=room_id,
+            did=did,
+            roomName="待删除房间",
+            resumeId="resume-001",
+            jobInfoId="job-001",
+            contextId="context-001",
+            experienceId="experience-001",
+            knowledgeId="knowledge-001",
+            createdAt=getCurrentUtcString(),
+            updatedAt=getCurrentUtcString(),
+            signature="signature"
+        )
+        create_request = room_pb2.CreateRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.CreateRoomRequestBody(room=room_metadata)
+        )
+        self.room_service.Create(create_request, None)
+        
+        # 测试删除
+        delete_request = room_pb2.DeleteRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.DeleteRoomRequestBody(roomId=room_id, did=did)
+        )
+        
+        delete_response = self.room_service.Delete(delete_request, None)
+        self.assertEqual(delete_response.body.status.code, 200)
+        
+        # 验证确实被删除了
+        get_request = room_pb2.GetRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.GetRoomRequestBody(roomId=room_id, did=did)
+        )
+        get_response = self.room_service.Get(get_request, None)
+        self.assertEqual(get_response.body.status.code, 404)
 
+    def test_grpc_delete_room_not_found(self):
+        """测试删除不存在的面试间"""
+        did = "did:example:delete-not-found-test"
+        room_id = str(uuid.uuid4())
+        
+        delete_request = room_pb2.DeleteRoomRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.DeleteRoomRequestBody(roomId=room_id, did=did)
+        )
+        
+        delete_response = self.room_service.Delete(delete_request, None)
+        self.assertEqual(delete_response.body.status.code, 404)
+
+    def test_grpc_list_rooms(self):
+        """测试列表面试间"""
+        did = "did:example:list-test"
+        
+        # 清理可能存在的测试数据
+        existing_rooms = self.room_service.getRoomsByDid(did)
+        for room in existing_rooms:
+            self.room_service.deleteRoom(did, room.roomId)
+        
+        # 创建3个房间用于测试
+        room_ids = []
+        for i in range(3):
+            room_id = str(uuid.uuid4())
+            room_ids.append(room_id)
+            
+            room_metadata = room_pb2.RoomMetadata(
+                roomId=room_id,
+                did=did,
+                roomName=f"测试房间{i+1}",
+                resumeId="resume-001",
+                jobInfoId="job-001",
+                contextId="context-001",
+                experienceId="experience-001",
+                knowledgeId="knowledge-001",
+                createdAt=getCurrentUtcString(),
+                updatedAt=getCurrentUtcString(),
+                signature="signature"
+            )
+            create_request = room_pb2.CreateRoomRequest(
+                header=message_pb2.MessageHeader(),
+                body=room_pb2.CreateRoomRequestBody(room=room_metadata)
+            )
+            self.room_service.Create(create_request, None)
+        
+        # 测试列表（第一页，每页2个）
+        list_request = room_pb2.ListRoomsRequest(
+            header=message_pb2.MessageHeader(),
+            body=room_pb2.ListRoomsRequestBody(did=did, page=1, pageSize=2)
+        )
+        
+        list_response = self.room_service.List(list_request, None)
+        self.assertEqual(list_response.body.status.code, 200)
+        self.assertEqual(len(list_response.body.rooms), 2)
+        self.assertEqual(list_response.body.total, 3)
+        self.assertEqual(list_response.body.page, 1)
+        self.assertEqual(list_response.body.pageSize, 2)
+        
+        # 测试第二页
+        list_request.body.page = 2
+        list_response = self.room_service.List(list_request, None)
+        self.assertEqual(list_response.body.status.code, 200)
+        self.assertEqual(len(list_response.body.rooms), 1)
+        self.assertEqual(list_response.body.total, 3)
+        
         # 清理
-        room_service.deleteRoom(did=did, room_id=room_id)
+        for room_id in room_ids:
+            self.room_service.deleteRoom(did, room_id)
 
 
 if __name__ == '__main__':

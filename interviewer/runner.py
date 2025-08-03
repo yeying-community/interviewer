@@ -8,6 +8,7 @@ import grpc
 from google.protobuf import json_format
 
 from interviewer.application.server.interceptor import SignatureInterceptor
+from interviewer.application.server.room import RoomService
 from interviewer.configs.config import Config
 from interviewer.domain.mapper.entities import (
     UserDO, UserStateDO, ResumeDO, JobInfoDO, InterviewRoomDO,
@@ -21,6 +22,7 @@ from interviewer.tool.file import read
 from interviewer.tool.object import safeGet
 from yeying.api import web3
 from yeying.api.web3 import BlockAddress
+import yeying.api.interviewer.room_pb2_grpc as room_pb2_grpc
 
 
 class Runner(object):
@@ -52,15 +54,11 @@ class Runner(object):
 
         authenticate = Authenticate(blockAddress=self.blockAddress)
 
-        # 暂时没有业务服务器，等后续实现
-        # resume_server = ResumeServer(authenticate=authenticate)
-        # room_server = RoomServer(authenticate=authenticate)
-        # session_server = SessionServer(authenticate=authenticate)
+        # 创建面试间服务
+        room_service = RoomService(authenticate=authenticate, db_instance=db_instance)
 
-        # 暂时没有服务注册，等后续实现
-        # interview_pb2_grpc.add_ResumeServicer_to_server(resume_server, self.server)
-        # interview_pb2_grpc.add_RoomServicer_to_server(room_server, self.server)
-        # interview_pb2_grpc.add_SessionServicer_to_server(session_server, self.server)
+        # 注册gRPC服务
+        room_pb2_grpc.add_RoomServicer_to_server(room_service, self.server)
 
         endpoint = f'[::]:{server_config.port}'
         if self.config.get_credential().enable:
