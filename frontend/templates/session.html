@@ -312,13 +312,21 @@ function addMessage(type, content) {
 
 // 生成面试题
 async function generateQuestions() {
-    const button = event.target.closest('button');
-    const originalContent = button.innerHTML;
+    // 查找所有生成按钮，优先使用header中的按钮
+    const headerButton = document.querySelector('.chat-header button');
+    const button = headerButton || (event && event.target && event.target.closest('button'));
+    
+    let originalContent = '';
+    if (button) {
+        originalContent = button.innerHTML;
+    }
     
     try {
         // 显示加载状态
-        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
-        button.disabled = true;
+        if (button) {
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
+            button.disabled = true;
+        }
         
         // 显示加载指示器
         document.getElementById('typingIndicator').style.display = 'flex';
@@ -374,8 +382,10 @@ async function generateQuestions() {
         document.getElementById('typingIndicator').style.display = 'none';
     } finally {
         // 恢复按钮状态
-        button.innerHTML = originalContent;
-        button.disabled = false;
+        if (button && originalContent) {
+            button.innerHTML = originalContent;
+            button.disabled = false;
+        }
     }
 }
 

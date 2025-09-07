@@ -140,13 +140,13 @@
                             </div>
                             <div class="col-6">
                                 <h5 class="text-success mb-1">
-                                    {% set total_rounds = 0 %}
+                                    {% set ns = namespace(total=0) %}
                                     {% for session_id in room.sessions %}
                                         {% if session_id in sessions %}
-                                            {% set total_rounds = total_rounds + sessions[session_id].rounds|length %}
+                                            {% set ns.total = ns.total + sessions[session_id].rounds|length %}
                                         {% endif %}
                                     {% endfor %}
-                                    {{ total_rounds }}
+                                    {{ ns.total }}
                                 </h5>
                                 <small class="text-muted">对话轮次</small>
                             </div>
@@ -223,11 +223,11 @@
                     <div class="card-body">
                         <i class="fas fa-question-circle fa-2x text-info mb-2"></i>
                         <h4 class="text-info">
-                            {% set total_questions = 0 %}
+                            {% set ns = namespace(total=0) %}
                             {% for round in rounds.values() %}
-                                {% set total_questions = total_questions + round.questions|length %}
+                                {% set ns.total = ns.total + round.questions|length %}
                             {% endfor %}
-                            {{ total_questions }}
+                            {{ ns.total }}
                         </h4>
                         <p class="mb-0 text-muted">生成题目</p>
                     </div>

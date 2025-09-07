@@ -166,11 +166,17 @@ def generate_questions(session_id):
         # 格式化简历内容
         resume_content = format_resume_for_llm(resume_data)
         
-        # 初始化Qwen客户端并生成问题
+        # 初始化Qwen客户端并生成分类问题
         client = QwenClient()
-        questions = client.generate_questions(resume_content, num_questions=5)
+        categorized_questions = client.generate_questions(resume_content)
         
-        if not questions:
+        # 合并所有问题
+        all_questions = []
+        for category, questions in categorized_questions.items():
+            for question in questions:
+                all_questions.append(f"【{category}】{question}")
+        
+        if not all_questions:
             return jsonify({'error': '未能生成面试题'}), 500
         
         # 创建新的轮次
@@ -181,7 +187,7 @@ def generate_questions(session_id):
             'id': round_id,
             'index': round_index,
             'session_id': session_id,
-            'questions': questions,
+            'questions': all_questions,
             'created_at': datetime.now().isoformat(),
             'type': 'ai_generated'
         }
@@ -189,12 +195,12 @@ def generate_questions(session_id):
         session['rounds'].append(round_id)
         
         # 保存生成的问题到文件（可选）
-        save_questions_to_file(questions, round_index)
+        save_questions_to_file(all_questions, round_index)
         
         return jsonify({
             'success': True,
             'round_id': round_id,
-            'questions': questions,
+            'questions': all_questions,
             'round_index': round_index
         })
         

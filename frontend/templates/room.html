@@ -94,13 +94,13 @@
                             </div>
                             <div class="col-6">
                                 <h5 class="text-success mb-1">
-                                    {% set total_questions = 0 %}
+                                    {% set ns = namespace(total=0) %}
                                     {% for round_id in session['rounds'] %}
                                         {% if round_id in rounds %}
-                                            {% set total_questions = total_questions + rounds[round_id].questions|length %}
+                                            {% set ns.total = ns.total + rounds[round_id].questions|length %}
                                         {% endif %}
                                     {% endfor %}
-                                    {{ total_questions }}
+                                    {{ ns.total }}
                                 </h5>
                                 <small class="text-muted">生成题目</small>
                             </div>
