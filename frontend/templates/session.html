@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+
+{% block title %}{{ session.name }} - 面试会话{% endblock %}
+
+{% block extra_css %}
+<style>
+    .candidate-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .interview-container {
+        height: calc(100vh - 200px);
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .sidebar {
+        width: 350px;
+        max-height: 100%;
+        overflow-y: auto;
+    }
+    
+    .chat-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    @media (max-width: 992px) {
+        .interview-container {
+            flex-direction: column;
+            height: auto;
+        }
+        
+        .sidebar {
+            width: 100%;
+            max-height: 300px;
+        }
+        
+        .chat-area {
+            height: calc(100vh - 350px);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- 面包屑导航 -->
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('index') }}">
+                        <i class="fas fa-home me-1"></i>首页
+                    </a>
+                </li>
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('room_detail', room_id=session.room_id) }}">
+                        <i class="fas fa-door-open me-1"></i>面试间
+                    </a>
+                </li>
+                <li class="breadcrumb-item active">
+                    <i class="fas fa-comments me-1"></i>{{ session.name }}
+                </li>
+            </ol>
+        </nav>
+        
+        <!-- 主要面试界面 -->
+        <div class="interview-container">
+            <!-- 左侧边栏：候选人信息和简历 -->
+            <div class="sidebar">
+                {% if resume %}
+                <!-- 候选人基本信息 -->
+                <div class="candidate-info">
+                    <div class="text-center mb-3">
+                        <div class="candidate-avatar mb-2">
+                            <i class="fas fa-user-circle fa-3x"></i>
+                        </div>
+                        <h5 class="mb-1">{{ resume.name }}</h5>
+                        <p class="mb-0 opacity-75">{{ resume.position }}</p>
+                    </div>
+                    
+                    <div class="candidate-stats">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="border-end border-light border-opacity-50">
+                                    <h6 class="mb-0">{{ resume.skills|length }}</h6>
+                                    <small class="opacity-75">技能项目</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="mb-0">{{ resume.projects|length }}</h6>
+                                <small class="opacity-75">项目经验</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 技能列表 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-cogs me-2"></i>技能栈
+                        </h6>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="skill-tags">
+                            {% for skill in resume.skills %}
+                            <div class="skill-item mb-2 p-2 border rounded">
+                                <small class="text-muted">{{ loop.index }}.</small>
+                                <span class="ms-1" style="font-size: 0.85rem;">{{ skill[:80] }}{% if skill|length > 80 %}...{% endif %}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 项目经验 -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-project-diagram me-2"></i>项目经验
+                        </h6>
+                    </div>
+                    <div class="card-body p-2">
+                        {% for project in resume.projects %}
+                        <div class="project-item mb-2 p-2 border rounded">
+                            <div class="d-flex align-items-start">
+                                <i class="fas fa-code text-primary me-2 mt-1"></i>
+                                <div class="flex-grow-1">
+                                    <small class="text-muted">项目 {{ loop.index }}</small>
+                                    <div style="font-size: 0.85rem;" class="mt-1">
+                                        {{ project[:100] }}{% if project|length > 100 %}...{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- 右侧：ChatGPT风格对话界面 -->
+            <div class="chat-area">
+                <div class="chat-container">
+                    <!-- 聊天头部 -->
+                    <div class="chat-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">{{ session.name }}</h6>
+                                <small class="opacity-75">AI智能面试官</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-light" onclick="generateQuestions()">
+                                    <i class="fas fa-plus me-1"></i>生成面试题
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 消息区域 -->
+                    <div class="chat-messages" id="chatMessages">
+                        <!-- 欢迎消息 -->
+                        <div class="message ai">
+                            <div class="message-avatar">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="message-content">
+                                <div>您好！我是您的AI面试官。我已经查看了您的简历，准备开始面试。</div>
+                                <div class="message-time">{{ session.created_at[:19]|replace('T', ' ') }}</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 动态加载的对话轮次 -->
+                        {% for round in rounds %}
+                        <div class="round-header">
+                            <span>第{{ round.index + 1 }}轮面试题</span>
+                        </div>
+                        
+                        <!-- AI生成的问题 -->
+                        <div class="message ai">
+                            <div class="message-avatar">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="message-content">
+                                <div>我为您准备了以下{{ round.questions|length }}道面试题：</div>
+                                <div class="questions-container mt-3">
+                                    {% for question in round.questions %}
+                                    <div class="question-card mb-2">
+                                        <div class="question-text">
+                                            <span class="question-number">{{ loop.index }}.</span>
+                                            {{ question }}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="message-time">{{ round.created_at[:19]|replace('T', ' ') }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- 加载指示器 -->
+                        <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                            <div class="message-avatar">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div>
+                                AI正在生成面试题
+                                <div class="typing-dots">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 输入区域 -->
+                    <div class="chat-input">
+                        <div class="input-group">
+                            <input type="text" 
+                                   class="form-control" 
+                                   placeholder="您可以回答面试题或请求生成新的题目..." 
+                                   id="messageInput"
+                                   onkeypress="handleKeyPress(event)">
+                            <button class="btn btn-primary" onclick="sendMessage()">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="mt-2 text-center">
+                            <small class="text-muted">
+                                按回车发送消息 | 
+                                <a href="javascript:generateQuestions()" class="text-decoration-none">点击生成新的面试题</a>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 全局会话ID
+const SESSION_ID = '{{ session.id }}';
+
+// 页面加载完成后滚动到底部
+$(document).ready(function() {
+    scrollToBottom();
+    console.log('面试会话页面已加载');
+});
+
+// 滚动到消息底部
+function scrollToBottom() {
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// 处理键盘按键
+function handleKeyPress(event) {
+    if (event.key === 'Enter') {
+        sendMessage();
+    }
+}
+
+// 发送消息（暂时只是UI展示，实际功能需要后端支持）
+function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    
+    if (message) {
+        // 添加用户消息到聊天区域
+        addMessage('user', message);
+        input.value = '';
+        
+        // 模拟AI回复
+        setTimeout(() => {
+            addMessage('ai', '感谢您的回答，这是一个很好的见解。如果您准备好了，我们可以继续下一题。');
+        }, 1000);
+    }
+}
+
+// 添加消息到聊天区域
+function addMessage(type, content) {
+    const chatMessages = document.getElementById('chatMessages');
+    const messageTime = new Date().toLocaleString('zh-CN');
+    
+    const messageHTML = `
+        <div class="message ${type}">
+            <div class="message-avatar">
+                <i class="fas fa-${type === 'user' ? 'user' : 'robot'}"></i>
+            </div>
+            <div class="message-content">
+                <div>${content}</div>
+                <div class="message-time">${messageTime}</div>
+            </div>
+        </div>
+    `;
+    
+    chatMessages.insertAdjacentHTML('beforeend', messageHTML);
+    scrollToBottom();
+}
+
+// 生成面试题
+async function generateQuestions() {
+    const button = event.target.closest('button');
+    const originalContent = button.innerHTML;
+    
+    try {
+        // 显示加载状态
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
+        button.disabled = true;
+        
+        // 显示加载指示器
+        document.getElementById('typingIndicator').style.display = 'flex';
+        scrollToBottom();
+        
+        // 调用API生成问题
+        const response = await fetch(`/generate_questions/${SESSION_ID}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        // 隐藏加载指示器
+        document.getElementById('typingIndicator').style.display = 'none';
+        
+        if (data.success) {
+            // 添加轮次标题
+            const roundHeader = `
+                <div class="round-header">
+                    <span>第${data.round_index + 1}轮面试题</span>
+                </div>
+            `;
+            document.getElementById('chatMessages').insertAdjacentHTML('beforeend', roundHeader);
+            
+            // 构建问题内容
+            let questionsHTML = '<div>我为您准备了以下面试题：</div><div class="questions-container mt-3">';
+            data.questions.forEach((question, index) => {
+                questionsHTML += `
+                    <div class="question-card mb-2">
+                        <div class="question-text">
+                            <span class="question-number">${index + 1}.</span>
+                            ${question}
+                        </div>
+                    </div>
+                `;
+            });
+            questionsHTML += '</div>';
+            
+            // 添加AI消息
+            addMessage('ai', questionsHTML);
+            
+            YeyingInterviewer.showToast('success', `成功生成${data.questions.length}道面试题`);
+        } else {
+            YeyingInterviewer.showToast('error', data.error || '生成面试题失败');
+        }
+        
+    } catch (error) {
+        console.error('生成面试题失败:', error);
+        YeyingInterviewer.showToast('error', '网络请求失败，请稍后再试');
+        document.getElementById('typingIndicator').style.display = 'none';
+    } finally {
+        // 恢复按钮状态
+        button.innerHTML = originalContent;
+        button.disabled = false;
+    }
+}
+
+// 页面卸载时的清理
+$(window).on('beforeunload', function() {
+    console.log('面试会话页面即将卸载');
+});
+</script>
+{% endblock %}

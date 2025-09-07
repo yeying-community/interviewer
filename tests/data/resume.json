@@ -1,0 +1,18 @@
+{
+  "interviewee_id": "interviewee_001",
+  "name": "李明",
+  "position": "agent开发工程师",
+  "skills": [
+    "大模型技术：熟练掌握OpenAI GPT系列、Claude、文心一言、通义千问等主流大模型API调用，深入理解prompt工程、few-shot学习和chain-of-thought推理",
+    "Agent框架：精通LangChain、AutoGPT、MetaGPT、CrewAI等主流Agent开发框架，具备多Agent协作系统架构设计和实现经验",
+    "RAG技术：掌握检索增强生成技术栈，熟练使用向量数据库（Chroma、Pinecone、Weaviate），了解文档切分、embedding、相似度检索等核心技术",
+    "工具集成：具备Agent工具调用能力开发经验，包括搜索引擎、API调用、数据库查询、文件操作等工具的封装和集成",
+    "多模态Agent：了解视觉理解、语音识别、图像生成等多模态Agent开发，熟悉OpenAI Vision、DALL-E等多模态模型应用",
+    "Agent部署：掌握Agent应用的容器化部署、监控告警、性能优化，了解Agent服务的高可用架构设计"
+  ],
+  "projects": [
+    "智能客服Agent系统 2024年03月- 2024年08月 技术栈：LangChain、OpenAI GPT-4、FastAPI、Redis、PostgreSQL、Docker 项目内容：基于大模型的智能客服Agent，支持多轮对话、意图识别、工单处理等功能。核心Agent架构：路由Agent负责意图分类和任务分发；知识库Agent基于RAG技术检索企业知识库；工单Agent自动创建和跟进客服工单；质检Agent对对话质量进行评估。技术亮点：设计了Agent记忆机制，支持长对话上下文维护；集成工具调用能力，支持查询订单、退款申请等业务操作；通过prompt优化和模型微调，问题解决率提升至85%",
+    "多Agent代码生成平台 2023年11月- 2024年02月 技术栈：MetaGPT、CodeT5、GitHub API、FastAPI、MongoDB 项目内容：基于多Agent协作的自动化代码生成平台，支持需求分析、架构设计、代码实现、测试用例生成的全流程自动化。Agent分工：产品经理Agent负责需求分析和PRD文档生成；架构师Agent进行技术选型和系统设计；开发Agent实现具体代码逻辑；测试Agent生成测试用例和执行测试。创新点：引入代码评审Agent，自动检测代码质量和安全问题；支持多种编程语言和框架的代码生成；集成CI/CD流程，实现代码自动部署",
+    "企业知识管理Agent助手 2023年06月- 2023年10月 技术栈：LangChain、Chroma、OpenAI Embeddings、Streamlit、MySQL 项目内容：为企业构建智能知识管理系统，支持文档解析、知识抽取、智能问答、知识图谱构建等功能。核心能力：文档处理Agent自动解析PDF、Word、PPT等格式文档，提取关键信息；知识图谱Agent构建实体关系网络，支持知识推理；问答Agent基于RAG技术提供准确回答；推荐Agent根据用户行为推荐相关知识。技术成果：处理企业内部10万+文档，知识检索准确率达90%；支持多语言知识处理；构建了包含5万个实体的企业知识图谱"
+  ]
+}

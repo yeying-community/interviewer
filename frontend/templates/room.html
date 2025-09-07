@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}{{ room.memory_id }} - 面试间详情{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- 面包屑导航 -->
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('index') }}">
+                        <i class="fas fa-home me-1"></i>首页
+                    </a>
+                </li>
+                <li class="breadcrumb-item active">
+                    <i class="fas fa-door-open me-1"></i>{{ room.memory_id }}
+                </li>
+            </ol>
+        </nav>
+        
+        <!-- 面试间信息 -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-door-open me-2"></i>
+                        面试间：{{ room.memory_id }}
+                    </h5>
+                    <div>
+                        <a href="{{ url_for('create_session', room_id=room.id) }}" class="btn btn-light btn-sm">
+                            <i class="fas fa-plus me-1"></i>
+                            创建会话
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>面试间ID:</strong> <code>{{ room.id }}</code></p>
+                        <p><strong>Memory ID:</strong> <code class="text-primary">{{ room.memory_id }}</code></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>创建时间:</strong> {{ room.created_at[:19]|replace('T', ' ') }}</p>
+                        <p><strong>会话数量:</strong> 
+                            <span class="badge bg-info">{{ sessions|length }}</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 面试会话列表 -->
+        {% if sessions %}
+        <div class="row">
+            <div class="col-12">
+                <h4 class="mb-3">
+                    <i class="fas fa-comments me-2"></i>
+                    面试会话 ({{ sessions|length }})
+                </h4>
+            </div>
+        </div>
+        
+        <div class="row">
+            {% for session in sessions %}
+            <div class="col-lg-6 col-xl-4 mb-4">
+                <div class="card session-card h-100" onclick="location.href='{{ url_for('session_detail', session_id=session['id']) }}'">
+                    <div class="card-header bg-info text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="fas fa-comments me-2"></i>
+                                {{ session['name'] }}
+                            </h6>
+                            <small class="opacity-75">
+                                {{ session['created_at'][:10] }}
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <strong>会话ID:</strong>
+                            <code class="text-info">{{ session['id'][:8] }}...</code>
+                        </div>
+                        
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="border-end">
+                                    <h5 class="text-primary mb-1">{{ session['rounds']|length }}</h5>
+                                    <small class="text-muted">对话轮次</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h5 class="text-success mb-1">
+                                    {% set total_questions = 0 %}
+                                    {% for round_id in session['rounds'] %}
+                                        {% if round_id in rounds %}
+                                            {% set total_questions = total_questions + rounds[round_id].questions|length %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    {{ total_questions }}
+                                </h5>
+                                <small class="text-muted">生成题目</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer bg-transparent">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>
+                                {{ session['created_at'][:19]|replace('T', ' ') }}
+                            </small>
+                            <div>
+                                <i class="fas fa-arrow-right text-info"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- 空状态 -->
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="fas fa-comments fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">还没有面试会话</h4>
+                <p class="text-muted">点击上方按钮创建第一个面试会话</p>
+            </div>
+            
+            <a href="{{ url_for('create_session', room_id=room.id) }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-plus me-2"></i>
+                创建面试会话
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 页面特定的JavaScript代码
+$(document).ready(function() {
+    console.log('面试间详情页面已加载');
+});
+</script>
+{% endblock %}
