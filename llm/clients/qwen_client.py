@@ -4,22 +4,29 @@
 
 import os
 import re
-import dashscope
+from openai import OpenAI
 from typing import List, Dict, Optional
 
 
 class QwenClient:
     """通义千问API客户端类"""
     
-    def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None):
         """初始化Qwen客户端"""
         self.api_key = api_key or os.getenv('API_KEY')
+        self.base_url = base_url or os.getenv('BASE_URL')
         self.model_name = model_name or os.getenv('MODEL_NAME', 'qwen-turbo')
         
         if not self.api_key:
             raise ValueError("API_KEY is required")
+        if not self.base_url:
+            raise ValueError("BASE_URL is required")
             
-        dashscope.api_key = self.api_key
+        # 初始化OpenAI客户端
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url
+        )
     
     def chat_completion(self, messages: List[Dict[str, str]], 
                        model: Optional[str] = None, 
@@ -27,24 +34,20 @@ class QwenClient:
                        max_tokens: int = 2000) -> str:
         """发送聊天请求到Qwen模型"""
         try:
-            response = dashscope.Generation.call(
+            response = self.client.chat.completions.create(
                 model=model or self.model_name,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens,
-                result_format='message'
+                max_tokens=max_tokens
             )
             
-            if response.status_code == 200:
-                return response.output.choices[0].message.content
-            else:
-                raise Exception(f"API请求失败: {response.status_code} - {response.message}")
+            return response.choices[0].message.content
                 
         except Exception as e:
             raise Exception(f"调用Qwen API失败: {str(e)}")
     
     def generate_questions(self, resume_content: str, question_types: Dict[str, int] = None) -> Dict[str, List[str]]:
-        """基于简历内容生成分类面试题"""
+        """基于简历内容生成面试题"""
         if question_types is None:
             question_types = {
                 "基础题": 3,
@@ -53,7 +56,7 @@ class QwenClient:
             }
         
         try:
-            from llm.prompts.question_prompts import get_categorized_interview_prompt
+            from llm.prompts.question_prompts import interview_prompt
         except ImportError:
             raise ImportError("无法导入提示词模块")
         
@@ -61,9 +64,9 @@ class QwenClient:
         
         for category, num in question_types.items():
             try:
-                prompt = get_categorized_interview_prompt(resume_content, category, num)
+                prompt = interview_prompt(resume_content, category, num)
                 messages = [{"role": "user", "content": prompt}]
-                response = self.chat_completion(messages, temperature=0.8)
+                response = self.chat_completion(messages, temperature=0.7)
                 questions = self._parse_questions_from_response(response)
                 result[category] = questions[:num] if len(questions) > num else questions
                 

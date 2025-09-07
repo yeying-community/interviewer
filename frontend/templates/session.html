@@ -194,7 +194,6 @@
                                     {% for question in round.questions %}
                                     <div class="question-card mb-2">
                                         <div class="question-text">
-                                            <span class="question-number">{{ loop.index }}.</span>
                                             {{ question }}
                                         </div>
                                     </div>
@@ -360,7 +359,6 @@ async function generateQuestions() {
                 questionsHTML += `
                     <div class="question-card mb-2">
                         <div class="question-text">
-                            <span class="question-number">${index + 1}.</span>
                             ${question}
                         </div>
                     </div>

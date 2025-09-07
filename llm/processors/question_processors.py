@@ -79,24 +79,27 @@ def format_resume_content(resume_data: dict) -> str:
     
     return content.strip()
 
-def save_questions_to_file(questions: list, output_path: str = "tests/data/questions.json", **metadata):
+def save_questions_to_file(questions: dict, output_path: str = "tests/data/questions.json", **metadata):
     """
     保存面试题到文件
     
-    将生成的面试题列表保存为JSON格式文件，包含题目列表、
+    将生成的面试题保存为JSON格式文件，包含各类型题目、
     题目数量和生成时间等元信息。
     
     Args:
-        questions (list): 面试题列表，每个元素为一道面试题的字符串
+        questions (dict): 面试题字典，格式为{"基础题": [...], "项目题": [...], "场景题": [...]}
         output_path (str): 输出文件路径，通常为tests/data/questions.json
-        **metadata: 额外的元数据，如round_index等
+        **metadata: 额外的元数据，如candidate_name、question_types等
         
     Raises:
         IOError: 当文件保存失败时
     """
+    total_count = sum(len(question_list) for question_list in questions.values())
+    
     qa_data = {
         'questions': questions,
-        'total_count': len(questions),
+        'total_count': total_count,
+        'category_counts': {category: len(question_list) for category, question_list in questions.items()},
         'generated_at': datetime.now().isoformat(),
         **metadata
     }
@@ -110,13 +113,13 @@ def save_questions_to_file(questions: list, output_path: str = "tests/data/quest
     except Exception as e:
         raise IOError(f"保存文件失败: {e}")
 
-def generate_interview_questions(resume_path: str = "tests/data/resume.json", 
-                                num_questions: int = 10,
-                                output_path: str = "tests/data/questions.json") -> dict:
+def generate_interview_questions(resume_path: str = "tests/data/resume.json",
+                                output_path: str = "tests/data/questions.json",
+                                question_types: dict = None) -> dict:
     """
     生成面试题的主要处理函数
     
-    这是模块的核心功能函数，负责完整的面试题生成流程：
+    负责完整的面试题生成流程：
     1. 加载环境变量配置
     2. 读取简历数据
     3. 初始化Qwen客户端
@@ -125,8 +128,8 @@ def generate_interview_questions(resume_path: str = "tests/data/resume.json",
     
     Args:
         resume_path (str): 简历文件路径
-        num_questions (int): 生成问题数量，默认10道
         output_path (str): 输出文件路径
+        question_types (dict): 问题类型配置，默认为3+3+3模式
         
     Returns:
         dict: 包含生成结果的字典，包含questions、success等字段
@@ -134,6 +137,13 @@ def generate_interview_questions(resume_path: str = "tests/data/resume.json",
     Raises:
         Exception: 当生成过程中出现任何错误时
     """
+    if question_types is None:
+        question_types = {
+            "基础题": 3,
+            "项目题": 3, 
+            "场景题": 3
+        }
+    
     # 加载环境变量配置（包括API密钥等）
     load_dotenv()
     
@@ -148,65 +158,32 @@ def generate_interview_questions(resume_path: str = "tests/data/resume.json",
         client = QwenClient()
         
         # 第四步：生成面试题
-        questions = client.generate_questions(resume_content, num_questions=num_questions)
+        questions = client.generate_questions(resume_content, question_types)
         
-        if not questions:
+        if not questions or not any(questions.values()):
             raise ValueError("未能生成任何面试题")
         
         # 第五步：保存面试题到文件
-        save_questions_to_file(questions, output_path, candidate_name=resume_data.get('name', '未知'))
+        save_questions_to_file(questions, output_path, 
+                              candidate_name=resume_data.get('name', '未知'),
+                              question_types=question_types)
+        
+        total_count = sum(len(question_list) for question_list in questions.values())
         
         return {
             'success': True,
             'questions': questions,
-            'total_count': len(questions),
+            'total_count': total_count,
             'candidate_name': resume_data.get('name', '未知'),
-            'message': f'成功生成 {len(questions)} 道面试题'
+            'message': f'成功生成 {total_count} 道面试题'
         }
         
     except Exception as e:
         return {
             'success': False,
             'error': str(e),
-            'questions': [],
+            'questions': {},
             'total_count': 0,
             'message': f'生成面试题失败: {str(e)}'
         }
-
-def batch_generate_questions(resume_path: str = "tests/data/resume.json",
-                           output_dir: str = "tests/data/",
-                           batch_configs: list = None) -> list:
-    """
-    批量生成不同类型的面试题
-    
-    支持批量生成多种类型的面试题，如基础题、项目题、场景题等。
-    
-    Args:
-        resume_path (str): 简历文件路径
-        output_dir (str): 输出目录
-        batch_configs (list): 批量配置列表，包含不同类型的生成参数
-        
-    Returns:
-        list: 包含所有生成结果的列表
-    """
-    if batch_configs is None:
-        batch_configs = [
-            {'type': 'basic', 'num_questions': 5, 'filename': 'basic_questions.json'},
-            {'type': 'project', 'num_questions': 5, 'filename': 'project_questions.json'},
-            {'type': 'scenario', 'num_questions': 5, 'filename': 'scenario_questions.json'}
-        ]
-    
-    results = []
-    
-    for config in batch_configs:
-        output_path = os.path.join(output_dir, config['filename'])
-        result = generate_interview_questions(
-            resume_path=resume_path,
-            num_questions=config['num_questions'],
-            output_path=output_path
-        )
-        result['type'] = config['type']
-        results.append(result)
-    
-    return results
 
