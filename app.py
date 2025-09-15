@@ -24,6 +24,7 @@ import sys
 sys.path.append(str(project_root))
 
 from llm.clients.qwen_client import QwenClient
+from backend.utils.minio_client import download_resume_data, upload_questions_data
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -40,12 +41,17 @@ sessions = {}
 rounds = {}
 
 def load_resume_data():
-    """加载简历数据"""
+    """从MinIO加载简历数据"""
     try:
-        with open('tests/data/resume.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return None
+        return download_resume_data()
+    except Exception as e:
+        print(f"Error loading resume data from MinIO: {e}")
+        # fallback to local file
+        try:
+            with open('tests/data/resume.json', 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None
 
 def format_resume_for_llm(resume_data):
     """格式化简历数据供LLM使用"""
@@ -208,9 +214,7 @@ def generate_questions(session_id):
         return jsonify({'error': f'生成面试题失败: {str(e)}'}), 500
 
 def save_questions_to_file(questions, round_index):
-    """保存问题到文件"""
-    os.makedirs('tests/data', exist_ok=True)
-    
+    """保存问题到MinIO"""
     qa_data = {
         'questions': questions,
         'round_index': round_index,
@@ -218,9 +222,25 @@ def save_questions_to_file(questions, round_index):
         'generated_at': datetime.now().isoformat()
     }
     
-    filename = f'tests/data/questions_round_{round_index}.json'
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(qa_data, f, ensure_ascii=False, indent=2)
+    try:
+        # 保存到MinIO
+        success = upload_questions_data(qa_data, round_index)
+        if success:
+            print(f"Questions saved to MinIO: round_{round_index}")
+        else:
+            print(f"Failed to save questions to MinIO, falling back to local file")
+            # fallback to local file
+            os.makedirs('tests/data', exist_ok=True)
+            filename = f'tests/data/questions_round_{round_index}.json'
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(qa_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving to MinIO: {e}, falling back to local file")
+        # fallback to local file
+        os.makedirs('tests/data', exist_ok=True)
+        filename = f'tests/data/questions_round_{round_index}.json'
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(qa_data, f, ensure_ascii=False, indent=2)
 
 @app.route('/api/rooms')
 def api_rooms():
@@ -240,6 +260,31 @@ def api_sessions(room_id):
             room_sessions.append(sessions[session_id])
     
     return jsonify(room_sessions)
+
+@app.route('/api/minio/test')
+def api_minio_test():
+    """API: 测试MinIO连接和数据访问"""
+    try:
+        from backend.utils.minio_client import minio_client
+        
+        # 测试列出文件
+        objects = minio_client.list_objects(prefix="data/")
+        
+        # 测试加载简历数据
+        resume_data = download_resume_data()
+        
+        return jsonify({
+            'status': 'success',
+            'minio_objects': objects,
+            'resume_loaded': resume_data is not None,
+            'candidate_name': resume_data.get('name') if resume_data else None
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 if __name__ == '__main__':
     # 创建默认的面试间和会话用于测试
@@ -263,4 +308,4 @@ if __name__ == '__main__':
         }
         rooms[default_room_id]['sessions'].append(default_session_id)
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True)

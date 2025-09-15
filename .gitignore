@@ -70,3 +70,4 @@ htmlcov/
 *.tmp
 *.temp
 ~*
+CLAUDE.md

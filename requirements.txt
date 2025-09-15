@@ -1,0 +1,4 @@
+flask
+python-dotenv
+dashscope
+minio
