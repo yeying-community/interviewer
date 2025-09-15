@@ -1,5 +1,5 @@
 """
-房间管理服务
+面试管理服务
 """
 
 import uuid
@@ -53,13 +53,21 @@ class RoomService:
     @staticmethod
     def to_dict(room: Room) -> Dict[str, Any]:
         """将Room对象转换为字典"""
+        sessions = SessionService.get_sessions_by_room(room.id)
+        total_rounds = 0
+        
+        for session in sessions:
+            rounds = RoundService.get_rounds_by_session(session.id)
+            total_rounds += len(rounds)
+        
         return {
             'id': room.id,
             'memory_id': room.memory_id,
             'name': room.name,
             'created_at': room.created_at.isoformat(),
             'updated_at': room.updated_at.isoformat(),
-            'sessions_count': room.sessions.count()
+            'sessions_count': len(sessions),
+            'rounds_count': total_rounds
         }
 
 
@@ -126,6 +134,12 @@ class SessionService:
     @staticmethod
     def to_dict(session: Session) -> Dict[str, Any]:
         """将Session对象转换为字典"""
+        rounds = RoundService.get_rounds_by_session(session.id)
+        total_questions = 0
+        
+        for round_obj in rounds:
+            total_questions += round_obj.questions_count
+        
         return {
             'id': session.id,
             'name': session.name,
@@ -133,7 +147,8 @@ class SessionService:
             'status': session.status,
             'created_at': session.created_at.isoformat(),
             'updated_at': session.updated_at.isoformat(),
-            'rounds_count': session.rounds.count()
+            'rounds_count': len(rounds),
+            'questions_count': total_questions
         }
 
 

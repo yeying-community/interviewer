@@ -4,7 +4,6 @@ API路由模块
 
 from flask import Blueprint, request, jsonify, render_template
 from backend.services.interview_service import RoomService, SessionService, RoundService
-from backend.services.question_service import question_generation_service
 from backend.utils.minio_client import download_resume_data, minio_client
 
 
@@ -16,10 +15,35 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 # 主页面路由
 @main_bp.route('/')
 def index():
-    """首页 - 显示面试间列表"""
+    """首页 - 显示面试间列表和系统统计"""
     rooms = RoomService.get_all_rooms()
     rooms_dict = [RoomService.to_dict(room) for room in rooms]
-    return render_template('index.html', rooms=rooms_dict)
+    
+    # 计算系统统计数据
+    total_sessions = 0
+    total_rounds = 0
+    total_questions = 0
+    
+    for room in rooms:
+        sessions = SessionService.get_sessions_by_room(room.id)
+        total_sessions += len(sessions)
+        
+        for session in sessions:
+            rounds = RoundService.get_rounds_by_session(session.id)
+            total_rounds += len(rounds)
+            
+            for round_obj in rounds:
+                total_questions += round_obj.questions_count
+    
+    # 系统统计数据
+    stats = {
+        'total_rooms': len(rooms),
+        'total_sessions': total_sessions,
+        'total_rounds': total_rounds,
+        'total_questions': total_questions
+    }
+    
+    return render_template('index.html', rooms=rooms_dict, stats=stats)
 
 
 @main_bp.route('/create_room')
@@ -70,7 +94,31 @@ def session_detail(session_id):
         return "面试会话不存在", 404
     
     rounds = RoundService.get_rounds_by_session(session_id)
-    rounds_dict = [RoundService.to_dict(round_obj) for round_obj in rounds]
+    rounds_dict = []
+    
+    # 为每个round加载问题数据
+    for round_obj in rounds:
+        round_data = RoundService.to_dict(round_obj)
+        
+        # 尝试从MinIO加载问题数据
+        try:
+            # 从questions_file_path提取文件标识
+            file_path = round_data['questions_file_path']
+            if 'questions_round_' in file_path:
+                # 提取round标识符，如"0_session_id"格式
+                round_identifier = file_path.split('questions_round_')[1].split('.json')[0]
+                questions_data = minio_client.download_json(f"data/questions_round_{round_identifier}.json")
+                if questions_data:
+                    round_data['questions'] = questions_data.get('questions', [])
+                else:
+                    round_data['questions'] = []
+            else:
+                round_data['questions'] = []
+        except Exception as e:
+            print(f"Error loading questions for round {round_data['id']}: {e}")
+            round_data['questions'] = []
+        
+        rounds_dict.append(round_data)
     
     # 获取简历数据用于展示
     resume_data = download_resume_data()
@@ -88,12 +136,17 @@ def generate_questions(session_id):
     if not session:
         return jsonify({'error': '面试会话不存在'}), 404
     
-    result = question_generation_service.generate_questions(session_id)
-    
-    if result['success']:
-        return jsonify(result)
-    else:
-        return jsonify({'error': result['error']}), 500
+    try:
+        from backend.services.question_service import get_question_generation_service
+        service = get_question_generation_service()
+        result = service.generate_questions(session_id)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify({'error': result['error']}), 500
+    except Exception as e:
+        return jsonify({'error': f'生成面试题失败: {str(e)}'}), 500
 
 
 # API路由

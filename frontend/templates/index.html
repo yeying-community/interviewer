@@ -15,7 +15,7 @@
                 <p class="text-muted mb-0">基于RAG技术的AI智能面试助手</p>
             </div>
             <div>
-                <a href="{{ url_for('create_room') }}" class="btn btn-primary">
+                <a href="{{ url_for('main.create_room') }}" class="btn btn-primary">
                     <i class="fas fa-plus me-1"></i>
                     创建面试间
                 </a>
@@ -87,7 +87,7 @@
                         </div>
                         
                         <div class="mt-4">
-                            <a href="{{ url_for('create_room') }}" class="btn btn-primary btn-lg">
+                            <a href="{{ url_for('main.create_room') }}" class="btn btn-primary btn-lg">
                                 <i class="fas fa-rocket me-2"></i>
                                 开始创建面试间
                             </a>
@@ -110,9 +110,9 @@
         </div>
         
         <div class="row">
-            {% for room in rooms.values() %}
+            {% for room in rooms %}
             <div class="col-lg-6 col-xl-4 mb-4">
-                <div class="card room-card h-100" onclick="location.href='{{ url_for('room_detail', room_id=room.id) }}'">
+                <div class="card room-card h-100" onclick="location.href='{{ url_for('main.room_detail', room_id=room.id) }}'">
                     <div class="card-header bg-primary text-white">
                         <div class="d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">
@@ -134,20 +134,12 @@
                         <div class="row text-center">
                             <div class="col-6">
                                 <div class="border-end">
-                                    <h5 class="text-primary mb-1">{{ room.sessions|length }}</h5>
+                                    <h5 class="text-primary mb-1">{{ room.sessions_count }}</h5>
                                     <small class="text-muted">面试会话</small>
                                 </div>
                             </div>
                             <div class="col-6">
-                                <h5 class="text-success mb-1">
-                                    {% set ns = namespace(total=0) %}
-                                    {% for session_id in room.sessions %}
-                                        {% if session_id in sessions %}
-                                            {% set ns.total = ns.total + sessions[session_id].rounds|length %}
-                                        {% endif %}
-                                    {% endfor %}
-                                    {{ ns.total }}
-                                </h5>
+                                <h5 class="text-success mb-1">{{ room.rounds_count }}</h5>
                                 <small class="text-muted">对话轮次</small>
                             </div>
                         </div>
@@ -186,7 +178,7 @@
                 <div class="card text-center">
                     <div class="card-body">
                         <i class="fas fa-door-open fa-2x text-primary mb-2"></i>
-                        <h4 class="text-primary">{{ rooms|length }}</h4>
+                        <h4 class="text-primary">{{ stats.total_rooms }}</h4>
                         <p class="mb-0 text-muted">面试间总数</p>
                     </div>
                 </div>
@@ -196,10 +188,7 @@
                 <div class="card text-center">
                     <div class="card-body">
                         <i class="fas fa-comments fa-2x text-success mb-2"></i>
-                        <h4 class="text-success">
-                            {% set total_sessions = sessions|length %}
-                            {{ total_sessions }}
-                        </h4>
+                        <h4 class="text-success">{{ stats.total_sessions }}</h4>
                         <p class="mb-0 text-muted">面试会话</p>
                     </div>
                 </div>
@@ -209,10 +198,7 @@
                 <div class="card text-center">
                     <div class="card-body">
                         <i class="fas fa-layer-group fa-2x text-warning mb-2"></i>
-                        <h4 class="text-warning">
-                            {% set total_rounds = rounds|length %}
-                            {{ total_rounds }}
-                        </h4>
+                        <h4 class="text-warning">{{ stats.total_rounds }}</h4>
                         <p class="mb-0 text-muted">对话轮次</p>
                     </div>
                 </div>
@@ -222,13 +208,7 @@
                 <div class="card text-center">
                     <div class="card-body">
                         <i class="fas fa-question-circle fa-2x text-info mb-2"></i>
-                        <h4 class="text-info">
-                            {% set ns = namespace(total=0) %}
-                            {% for round in rounds.values() %}
-                                {% set ns.total = ns.total + round.questions|length %}
-                            {% endfor %}
-                            {{ ns.total }}
-                        </h4>
+                        <h4 class="text-info">{{ stats.total_questions }}</h4>
                         <p class="mb-0 text-muted">生成题目</p>
                     </div>
                 </div>

@@ -97,5 +97,12 @@ class QuestionGenerationService:
         return content.strip()
 
 
-# 全局服务实例
-question_generation_service = QuestionGenerationService()
+# 延迟初始化全局服务实例
+_question_generation_service = None
+
+def get_question_generation_service():
+    """获取问题生成服务实例（延迟初始化）"""
+    global _question_generation_service
+    if _question_generation_service is None:
+        _question_generation_service = QuestionGenerationService()
+    return _question_generation_service
