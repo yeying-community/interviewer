@@ -13,7 +13,7 @@ class QwenClient:
     
     def __init__(self, api_key: Optional[str] = None, model_name: Optional[str] = None):
         """初始化Qwen客户端"""
-        self.api_key = api_key or os.getenv('API_KEY')
+        self.api_key = api_key or os.getenv('QWEN_API_KEY') or os.getenv('API_KEY')
         self.model_name = model_name or os.getenv('MODEL_NAME', 'qwen-turbo')
         
         if not self.api_key:
