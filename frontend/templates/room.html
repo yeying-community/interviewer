@@ -28,10 +28,16 @@
                         面试间：{{ room.memory_id }}
                     </h5>
                     <div>
-                        <a href="{{ url_for('main.create_session', room_id=room.id) }}" class="btn btn-light btn-sm">
+                        <a href="{{ url_for('main.create_session', room_id=room.id) }}" class="btn btn-light btn-sm me-2">
                             <i class="fas fa-plus me-1"></i>
                             创建会话
                         </a>
+                        <button class="btn btn-outline-light btn-sm delete-room-btn"
+                                data-room-id="{{ room.id }}"
+                                data-room-name="{{ room.memory_id }}">
+                            <i class="fas fa-trash me-1"></i>
+                            删除面试间
+                        </button>
                     </div>
                 </div>
             </div>
@@ -66,25 +72,32 @@
         <div class="row">
             {% for session in sessions %}
             <div class="col-lg-6 col-xl-4 mb-4">
-                <div class="card session-card h-100" onclick="location.href='{{ url_for('main.session_detail', session_id=session['id']) }}'">
+                <div class="card session-card h-100">
                     <div class="card-header bg-info text-white">
                         <div class="d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">
                                 <i class="fas fa-comments me-2"></i>
                                 {{ session['name'] }}
                             </h6>
-                            <small class="opacity-75">
-                                {{ session['created_at'][:10] }}
-                            </small>
+                            <div class="d-flex align-items-center">
+                                <small class="opacity-75 me-2">
+                                    {{ session['created_at'][:10] }}
+                                </small>
+                                <button class="btn btn-sm btn-outline-light delete-session-btn"
+                                        data-session-id="{{ session['id'] }}"
+                                        data-session-name="{{ session['name'] }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="card-body">
+
+                    <div class="card-body" onclick="location.href='{{ url_for('main.session_detail', session_id=session['id']) }}'">
                         <div class="mb-2">
                             <strong>会话ID:</strong>
                             <code class="text-info">{{ session['id'][:8] }}...</code>
                         </div>
-                        
+
                         <div class="row text-center">
                             <div class="col-6">
                                 <div class="border-end">
@@ -98,8 +111,8 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="card-footer bg-transparent">
+
+                    <div class="card-footer bg-transparent" onclick="location.href='{{ url_for('main.session_detail', session_id=session['id']) }}'">
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted">
                                 <i class="fas fa-clock me-1"></i>

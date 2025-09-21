@@ -2,7 +2,7 @@
 API路由模块
 """
 
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for
 from backend.services.interview_service import RoomService, SessionService, RoundService
 from backend.utils.minio_client import download_resume_data, minio_client
 
@@ -50,11 +50,7 @@ def index():
 def create_room():
     """创建新的面试间"""
     room = RoomService.create_room()
-    return jsonify({
-        'success': True,
-        'room': RoomService.to_dict(room),
-        'redirect_url': f'/room/{room.id}'
-    })
+    return redirect(url_for('main.room_detail', room_id=room.id))
 
 
 @main_bp.route('/room/<room_id>')
@@ -78,12 +74,8 @@ def create_session(room_id):
     session = SessionService.create_session(room_id)
     if not session:
         return "面试间不存在", 404
-    
-    return jsonify({
-        'success': True,
-        'session': SessionService.to_dict(session),
-        'redirect_url': f'/session/{session.id}'
-    })
+
+    return redirect(url_for('main.session_detail', session_id=session.id))
 
 
 @main_bp.route('/session/<session_id>')
@@ -155,6 +147,32 @@ def api_rooms():
     """API: 获取所有面试间"""
     rooms = RoomService.get_all_rooms()
     return jsonify([RoomService.to_dict(room) for room in rooms])
+
+
+@api_bp.route('/rooms/<room_id>', methods=['DELETE'])
+def api_delete_room(room_id):
+    """API: 删除面试间"""
+    try:
+        success = RoomService.delete_room(room_id)
+        if success:
+            return jsonify({'success': True, 'message': '面试间删除成功'})
+        else:
+            return jsonify({'success': False, 'error': '面试间不存在'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'删除失败: {str(e)}'}), 500
+
+
+@api_bp.route('/sessions/<session_id>', methods=['DELETE'])
+def api_delete_session(session_id):
+    """API: 删除面试会话"""
+    try:
+        success = SessionService.delete_session(session_id)
+        if success:
+            return jsonify({'success': True, 'message': '面试会话删除成功'})
+        else:
+            return jsonify({'success': False, 'error': '面试会话不存在'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'删除失败: {str(e)}'}), 500
 
 
 @api_bp.route('/sessions/<room_id>')

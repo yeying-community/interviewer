@@ -5,6 +5,17 @@
 $(document).ready(function() {
     // 初始化页面
     initializePage();
+
+    // 测试删除按钮是否存在
+    console.log('页面加载完成，删除按钮数量:', $('.delete-room-btn').length + $('.delete-session-btn').length);
+
+    // 测试jQuery是否工作
+    console.log('jQuery版本:', $.fn.jquery);
+
+    // 测试事件绑定
+    $('#test-btn').on('click', function() {
+        alert('jQuery工作正常！');
+    });
 });
 
 // 初始化页面
@@ -34,13 +45,47 @@ function bindGlobalEvents() {
         if ($(e.target).is('a, button') || $(e.target).parents('a, button').length) {
             return;
         }
-        
+
         var href = $(this).data('href') || $(this).find('a').attr('href');
         if (href) {
             window.location.href = href;
         }
     });
-    
+
+    // 删除面试间按钮事件
+    $(document).on('click', '.delete-room-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log('删除面试间按钮被点击');
+
+        const roomId = $(this).attr('data-room-id');
+        const roomName = $(this).attr('data-room-name');
+
+        console.log('房间ID:', roomId, '房间名称:', roomName);
+
+        showDeleteConfirmModal('面试间', roomName, function() {
+            deleteRoom(roomId);
+        });
+    });
+
+    // 删除面试会话按钮事件
+    $(document).on('click', '.delete-session-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log('删除面试会话按钮被点击');
+
+        const sessionId = $(this).attr('data-session-id');
+        const sessionName = $(this).attr('data-session-name');
+
+        console.log('会话ID:', sessionId, '会话名称:', sessionName);
+
+        showDeleteConfirmModal('面试会话', sessionName, function() {
+            deleteSession(sessionId);
+        });
+    });
+
     // ESC键关闭模态框
     $(document).on('keydown', function(e) {
         if (e.key === 'Escape') {
@@ -219,6 +264,126 @@ class ApiClient {
     
     static async delete(url) {
         return this.request(url, { method: 'DELETE' });
+    }
+}
+
+// 显示删除确认模态框
+function showDeleteConfirmModal(type, name, onConfirm) {
+    const modalHtml = `
+        <div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                            确认删除
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-1">你确定要删除这个${type}吗？</p>
+                        <p class="text-muted mb-3"><strong>${name}</strong></p>
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>注意：</strong>删除操作不可恢复，相关的数据也会被一并删除。
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-1"></i>
+                            取消
+                        </button>
+                        <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                            <i class="fas fa-trash me-1"></i>
+                            确认删除
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 移除已存在的模态框
+    $('#deleteConfirmModal').remove();
+
+    // 添加新的模态框
+    $('body').append(modalHtml);
+
+    const modal = new bootstrap.Modal('#deleteConfirmModal');
+
+    // 绑定确认删除事件
+    $('#confirmDeleteBtn').on('click', function() {
+        modal.hide();
+        onConfirm();
+    });
+
+    // 显示模态框
+    modal.show();
+
+    // 自动清理DOM
+    $('#deleteConfirmModal').on('hidden.bs.modal', function() {
+        $(this).remove();
+    });
+}
+
+// 删除面试间
+async function deleteRoom(roomId) {
+    try {
+        showToast('info', '正在删除面试间...');
+
+        const result = await ApiClient.delete(`/api/rooms/${roomId}`);
+
+        if (result.success) {
+            showToast('success', '面试间删除成功');
+
+            // 如果在面试间详情页，跳转到首页
+            if (window.location.pathname.includes('/room/')) {
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1000);
+            } else {
+                // 如果在首页，刷新页面
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        } else {
+            showToast('error', result.error || '删除面试间失败');
+        }
+    } catch (error) {
+        console.error('删除面试间出错:', error);
+        showToast('error', '删除面试间失败，请稍后重试');
+    }
+}
+
+// 删除面试会话
+async function deleteSession(sessionId) {
+    try {
+        showToast('info', '正在删除面试会话...');
+
+        const result = await ApiClient.delete(`/api/sessions/${sessionId}`);
+
+        if (result.success) {
+            showToast('success', '面试会话删除成功');
+
+            // 如果在会话详情页，跳转回面试间
+            if (window.location.pathname.includes('/session/')) {
+                // 需要从URL或其他方式获取room_id，这里先刷新页面
+                setTimeout(() => {
+                    window.history.back();
+                }, 1000);
+            } else {
+                // 刷新当前页面
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        } else {
+            showToast('error', result.error || '删除面试会话失败');
+        }
+    } catch (error) {
+        console.error('删除面试会话出错:', error);
+        showToast('error', '删除面试会话失败，请稍后重试');
     }
 }
 

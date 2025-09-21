@@ -44,16 +44,17 @@ def init_app():
     # 初始化数据库
     init_database()
     print("✅ Database initialized")
-    
-    # 创建默认数据（如果需要）
-    try:
-        from backend.services.interview_service import RoomService
-        rooms = RoomService.get_all_rooms()
-        if not rooms:
-            default_room = RoomService.create_room("默认面试间")
-            print(f"✅ Created default room: {default_room.id}")
-    except Exception as e:
-        print(f"⚠️  Error creating default room: {e}")
+
+    # 注释掉自动创建默认面试间的逻辑
+    # # 创建默认数据（如果需要）
+    # try:
+    #     from backend.services.interview_service import RoomService
+    #     rooms = RoomService.get_all_rooms()
+    #     if not rooms:
+    #         default_room = RoomService.create_room("默认面试间")
+    #         print(f"✅ Created default room: {default_room.id}")
+    # except Exception as e:
+    #     print(f"⚠️  Error creating default room: {e}")
 
 
 if __name__ == '__main__':
