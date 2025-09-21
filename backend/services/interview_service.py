@@ -172,7 +172,9 @@ class RoundService:
             round_index=round_index,
             questions_count=len(questions),
             questions_file_path=questions_file_path,
-            round_type=round_type
+            round_type=round_type,
+            current_question_index=0,
+            status='active'
         )
         return round_obj
     

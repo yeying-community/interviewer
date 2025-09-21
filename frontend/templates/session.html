@@ -250,14 +250,35 @@
 
 {% block extra_js %}
 <script>
-// 全局会话ID
+// 全局会话ID和当前轮次状态
 const SESSION_ID = '{{ session.id }}';
+let currentRoundId = null;
+let currentQuestionData = null;
 
 // 页面加载完成后滚动到底部
 $(document).ready(function() {
     scrollToBottom();
     console.log('面试会话页面已加载');
+
+    // 检查是否有进行中的轮次
+    checkActiveRound();
 });
+
+// 检查是否有进行中的轮次
+async function checkActiveRound() {
+    // 查找页面中的最后一个轮次
+    const rounds = document.querySelectorAll('.round-header');
+    if (rounds.length > 0) {
+        // 从最后一个轮次header提取round_id
+        const lastRound = rounds[rounds.length - 1];
+        const roundData = lastRound.dataset.roundId;
+        if (roundData) {
+            currentRoundId = roundData;
+            // 尝试加载当前问题
+            await loadCurrentQuestion();
+        }
+    }
+}
 
 // 滚动到消息底部
 function scrollToBottom() {
@@ -272,19 +293,26 @@ function handleKeyPress(event) {
     }
 }
 
-// 发送消息（暂时只是UI展示，实际功能需要后端支持）
+// 发送消息（处理用户回答）
 function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
-    
-    if (message) {
+
+    if (message && currentQuestionData) {
         // 添加用户消息到聊天区域
         addMessage('user', message);
         input.value = '';
-        
+
+        // 保存回答到后端
+        saveAnswer(currentQuestionData.qa_id, message);
+    } else if (message && !currentQuestionData) {
+        // 没有当前问题时的普通聊天
+        addMessage('user', message);
+        input.value = '';
+
         // 模拟AI回复
         setTimeout(() => {
-            addMessage('ai', '感谢您的回答，这是一个很好的见解。如果您准备好了，我们可以继续下一题。');
+            addMessage('ai', '感谢您的回答。如果您准备好了，可以点击"生成面试题"开始面试。');
         }, 1000);
     }
 }
@@ -346,32 +374,24 @@ async function generateQuestions() {
         document.getElementById('typingIndicator').style.display = 'none';
         
         if (data.success) {
+            // 设置当前轮次ID
+            currentRoundId = data.round_id;
+
             // 添加轮次标题
             const roundHeader = `
-                <div class="round-header">
+                <div class="round-header" data-round-id="${data.round_id}">
                     <span>第${data.round_index + 1}轮面试题</span>
                 </div>
             `;
             document.getElementById('chatMessages').insertAdjacentHTML('beforeend', roundHeader);
-            
-            // 构建问题内容
-            let questionsHTML = '<div>我为您准备了以下面试题：</div><div class="questions-container mt-3">';
-            data.questions.forEach((question, index) => {
-                questionsHTML += `
-                    <div class="question-card mb-2">
-                        <div class="question-text">
-                            <span class="question-number">${index + 1}.</span>
-                            ${question}
-                        </div>
-                    </div>
-                `;
-            });
-            questionsHTML += '</div>';
-            
-            // 添加AI消息
-            addMessage('ai', questionsHTML);
-            
+
+            // 显示开始消息
+            addMessage('ai', `好的！我为您准备了${data.questions.length}道面试题。让我们逐一进行，请仔细回答每一道题目。`);
+
             YeyingInterviewer.showToast('success', `成功生成${data.questions.length}道面试题`);
+
+            // 加载第一个问题
+            await loadCurrentQuestion();
         } else {
             YeyingInterviewer.showToast('error', data.error || '生成面试题失败');
         }
@@ -386,6 +406,94 @@ async function generateQuestions() {
             button.innerHTML = originalContent;
             button.disabled = false;
         }
+    }
+}
+
+// 加载当前问题
+async function loadCurrentQuestion() {
+    if (!currentRoundId) return;
+
+    try {
+        const response = await fetch(`/get_current_question/${currentRoundId}`);
+        const data = await response.json();
+
+        if (data.success && data.question_data) {
+            currentQuestionData = data.question_data;
+
+            // 显示当前问题
+            const questionHTML = `
+                <div class="current-question-info mb-2">
+                    <small class="text-muted">【${data.question_data.category}】问题 ${data.question_data.question_number}/${data.question_data.total_questions}</small>
+                </div>
+                <div class="question-text">${data.question_data.question}</div>
+                <div class="mt-2">
+                    <small class="text-info">请在下方输入框中回答这个问题...</small>
+                </div>
+            `;
+
+            addMessage('ai', questionHTML);
+
+            // 更新输入框提示
+            const input = document.getElementById('messageInput');
+            input.placeholder = `请回答第${data.question_data.question_number}题...`;
+            input.focus();
+
+        } else {
+            // 没有更多问题了
+            currentQuestionData = null;
+            addMessage('ai', '🎉 恭喜！您已经完成了本轮所有面试题。您可以生成新的一轮面试题继续练习。');
+
+            // 恢复输入框提示
+            const input = document.getElementById('messageInput');
+            input.placeholder = '您可以回答面试题或请求生成新的题目...';
+        }
+
+    } catch (error) {
+        console.error('加载问题失败:', error);
+        YeyingInterviewer.showToast('error', '加载问题失败');
+    }
+}
+
+// 保存用户回答
+async function saveAnswer(qaId, answerText) {
+    try {
+        const response = await fetch('/save_answer', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                qa_id: qaId,
+                answer_text: answerText
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // 显示确认消息
+            setTimeout(() => {
+                if (data.is_round_completed) {
+                    addMessage('ai', '✅ 回答已保存！🎉 您已完成本轮所有面试题，表现出色！');
+                    currentQuestionData = null;
+
+                    // 恢复输入框提示
+                    const input = document.getElementById('messageInput');
+                    input.placeholder = '您可以回答面试题或请求生成新的题目...';
+                } else {
+                    addMessage('ai', `✅ 回答已保存！还有 ${data.remaining_questions} 道题，让我们继续下一题。`);
+                    // 加载下一个问题
+                    setTimeout(() => loadCurrentQuestion(), 1000);
+                }
+            }, 500);
+
+        } else {
+            YeyingInterviewer.showToast('error', data.error || '保存回答失败');
+        }
+
+    } catch (error) {
+        console.error('保存回答失败:', error);
+        YeyingInterviewer.showToast('error', '保存回答失败');
     }
 }
 

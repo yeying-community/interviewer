@@ -127,18 +127,87 @@ def generate_questions(session_id):
     session = SessionService.get_session(session_id)
     if not session:
         return jsonify({'error': '面试会话不存在'}), 404
-    
+
     try:
         from backend.services.question_service import get_question_generation_service
         service = get_question_generation_service()
         result = service.generate_questions(session_id)
-        
+
         if result['success']:
             return jsonify(result)
         else:
             return jsonify({'error': result['error']}), 500
     except Exception as e:
         return jsonify({'error': f'生成面试题失败: {str(e)}'}), 500
+
+
+@main_bp.route('/get_current_question/<round_id>')
+def get_current_question(round_id):
+    """获取当前问题"""
+    try:
+        from backend.services.question_service import get_question_generation_service
+        service = get_question_generation_service()
+        question_data = service.get_current_question(round_id)
+
+        if question_data:
+            return jsonify({
+                'success': True,
+                'question_data': question_data
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '没有更多问题了'
+            })
+    except Exception as e:
+        return jsonify({'error': f'获取问题失败: {str(e)}'}), 500
+
+
+@main_bp.route('/save_answer', methods=['POST'])
+def save_answer():
+    """保存用户回答"""
+    try:
+        data = request.get_json()
+        qa_id = data.get('qa_id')
+        answer_text = data.get('answer_text')
+
+        if not qa_id or not answer_text:
+            return jsonify({'error': '缺少必要参数'}), 400
+
+        from backend.services.question_service import get_question_generation_service
+        service = get_question_generation_service()
+        result = service.save_answer(qa_id, answer_text.strip())
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': f'保存回答失败: {str(e)}'}), 500
+
+
+@main_bp.route('/get_qa_analysis/<session_id>/<int:round_index>')
+def get_qa_analysis(session_id, round_index):
+    """获取指定轮次的QA分析数据"""
+    try:
+        from backend.utils.minio_client import minio_client
+
+        # 尝试从MinIO加载分析数据
+        analysis_filename = f"analysis/qa_complete_{round_index}_{session_id}.json"
+        analysis_data = minio_client.download_json(analysis_filename)
+
+        if analysis_data:
+            return jsonify({
+                'success': True,
+                'analysis_data': analysis_data,
+                'file_path': analysis_filename
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '分析数据不存在或轮次未完成'
+            }), 404
+
+    except Exception as e:
+        return jsonify({'error': f'获取分析数据失败: {str(e)}'}), 500
 
 
 # API路由
