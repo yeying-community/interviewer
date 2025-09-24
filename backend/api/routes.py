@@ -2,10 +2,13 @@
 API路由模块
 """
 
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for
 from backend.services.interview_service import RoomService, SessionService, RoundService
 from backend.utils.minio_client import download_resume_data, minio_client
 
+# === digitalhub 客户端 & os ===
+from backend.services.digitalhub_client import ping_dh, boot_dh, start_llm
+import os
 
 # 创建蓝图
 main_bp = Blueprint('main', __name__)
@@ -49,17 +52,25 @@ def index():
 @main_bp.route('/create_room')
 def create_room():
     """创建新的面试间"""
+    # 进入创建面试间时，静默 ping 数字人
+    try:
+        ping_dh()
+    except Exception:
+        pass
+
     room = RoomService.create_room()
-    return jsonify({
-        'success': True,
-        'room': RoomService.to_dict(room),
-        'redirect_url': f'/room/{room.id}'
-    })
+    return redirect(url_for('main.room_detail', room_id=room.id))
 
 
 @main_bp.route('/room/<room_id>')
 def room_detail(room_id):
     """面试间详情页面"""
+    # 点击已有面试间时，静默 ping 数字人
+    try:
+        ping_dh()
+    except Exception:
+        pass
+
     room = RoomService.get_room(room_id)
     if not room:
         return "面试间不存在", 404
@@ -78,21 +89,29 @@ def create_session(room_id):
     session = SessionService.create_session(room_id)
     if not session:
         return "面试间不存在", 404
-    
-    return jsonify({
-        'success': True,
-        'session': SessionService.to_dict(session),
-        'redirect_url': f'/session/{session.id}'
-    })
+
+    # 变更：创建会话后，不再跳数字人；跳回会话页，由会话页触发启动并展示链接
+    return redirect(url_for('main.session_detail', session_id=session.id))
 
 
 @main_bp.route('/session/<session_id>')
 def session_detail(session_id):
-    """面试会话详情页面"""
+    """面试会话详情页面（进入此页时启动数字人，并把提示作为AI消息插入）"""
     session = SessionService.get_session(session_id)
     if not session:
         return "面试会话不存在", 404
-    
+
+    # 进入会话页时，启动数字人（已在运行则复用），拿到提示文案与链接
+    dh_message, dh_connect_url = None, None
+    try:
+        public_host = os.getenv("PUBLIC_HOST")
+        resp = boot_dh(session.room_id, session.id, public_host=public_host)
+        dh_message = (resp.get("data") or {}).get("message")
+        dh_connect_url = (resp.get("data") or {}).get("connect_url")
+    except Exception as e:
+        # 启动失败不阻塞页面；前端只是不显示那条提示
+        dh_message, dh_connect_url = None, None
+
     rounds = RoundService.get_rounds_by_session(session_id)
     rounds_dict = []
     
@@ -126,27 +145,115 @@ def session_detail(session_id):
     return render_template('session.html',
                          session=SessionService.to_dict(session),
                          rounds=rounds_dict,
-                         resume=resume_data)
+                         resume=resume_data,
+                         # 新增：注入数字人提示与链接，供模板插入AI消息/按钮
+                         dh_message=dh_message,
+                         dh_connect_url=dh_connect_url)
 
 
 @main_bp.route('/generate_questions/<session_id>', methods=['POST'])
 def generate_questions(session_id):
-    """生成面试题"""
+    """生成面试题 + 启动 LLM Round Server"""
     session = SessionService.get_session(session_id)
     if not session:
         return jsonify({'error': '面试会话不存在'}), 404
-    
+
     try:
         from backend.services.question_service import get_question_generation_service
         service = get_question_generation_service()
         result = service.generate_questions(session_id)
-        
+
         if result['success']:
+            # 题目生成成功后，启动 LLM（按约定用 session_id/round_index）
+            try:
+                llm_info = start_llm(
+                    session_id=session_id,
+                    round_index=int(result.get('round_index', 0)),
+                    port=int(os.getenv("LLM_PORT", "8011")),
+                    minio_endpoint=os.getenv("MINIO_ENDPOINT", "test-minio.yeying.pub"),
+                    minio_access_key=os.getenv("MINIO_ACCESS_KEY", ""),
+                    minio_secret_key=os.getenv("MINIO_SECRET_KEY", ""),
+                    minio_bucket=os.getenv("MINIO_BUCKET", "yeying-interviewer"),
+                    minio_secure=os.getenv("MINIO_SECURE", "true").lower() == "true",
+                )
+                result['llm'] = llm_info.get('data', llm_info)
+            except Exception as e:
+                result['llm_error'] = str(e)
+
             return jsonify(result)
         else:
             return jsonify({'error': result['error']}), 500
     except Exception as e:
         return jsonify({'error': f'生成面试题失败: {str(e)}'}), 500
+
+
+@main_bp.route('/get_current_question/<round_id>')
+def get_current_question(round_id):
+    """获取当前问题"""
+    try:
+        from backend.services.question_service import get_question_generation_service
+        service = get_question_generation_service()
+        question_data = service.get_current_question(round_id)
+
+        if question_data:
+            return jsonify({
+                'success': True,
+                'question_data': question_data
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '没有更多问题了'
+            })
+    except Exception as e:
+        return jsonify({'error': f'获取问题失败: {str(e)}'}), 500
+
+
+@main_bp.route('/save_answer', methods=['POST'])
+def save_answer():
+    """保存用户回答"""
+    try:
+        data = request.get_json()
+        qa_id = data.get('qa_id')
+        answer_text = data.get('answer_text')
+
+        if not qa_id or not answer_text:
+            return jsonify({'error': '缺少必要参数'}), 400
+
+        from backend.services.question_service import get_question_generation_service
+        service = get_question_generation_service()
+        result = service.save_answer(qa_id, answer_text.strip())
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': f'保存回答失败: {str(e)}'}), 500
+
+
+@main_bp.route('/get_qa_analysis/<session_id>/<int:round_index>')
+def get_qa_analysis(session_id, round_index):
+    """获取指定轮次的QA分析数据"""
+    try:
+        from backend.utils.minio_client import minio_client
+
+        # 尝试从MinIO加载分析数据
+        analysis_filename = f"analysis/qa_complete_{round_index}_{session_id}.json"
+        analysis_data = minio_client.download_json(analysis_filename)
+
+        if analysis_data:
+            return jsonify({
+                'success': True,
+                'analysis_data': analysis_data,
+                'file_path': analysis_filename
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '分析数据不存在或轮次未完成'
+            }), 404
+
+    except Exception as e:
+        return jsonify({'error': f'获取分析数据失败: {str(e)}'}), 500
 
 
 # API路由
@@ -155,6 +262,32 @@ def api_rooms():
     """API: 获取所有面试间"""
     rooms = RoomService.get_all_rooms()
     return jsonify([RoomService.to_dict(room) for room in rooms])
+
+
+@api_bp.route('/rooms/<room_id>', methods=['DELETE'])
+def api_delete_room(room_id):
+    """API: 删除面试间"""
+    try:
+        success = RoomService.delete_room(room_id)
+        if success:
+            return jsonify({'success': True, 'message': '面试间删除成功'})
+        else:
+            return jsonify({'success': False, 'error': '面试间不存在'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'删除失败: {str(e)}'}), 500
+
+
+@api_bp.route('/sessions/<session_id>', methods=['DELETE'])
+def api_delete_session(session_id):
+    """API: 删除面试会话"""
+    try:
+        success = SessionService.delete_session(session_id)
+        if success:
+            return jsonify({'success': True, 'message': '面试会话删除成功'})
+        else:
+            return jsonify({'success': False, 'error': '面试会话不存在'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'删除失败: {str(e)}'}), 500
 
 
 @api_bp.route('/sessions/<room_id>')

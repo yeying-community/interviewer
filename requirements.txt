@@ -3,3 +3,4 @@ python-dotenv
 dashscope
 minio
 peewee
+requests>=2.31

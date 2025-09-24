@@ -122,9 +122,36 @@ class MinIOClient:
             self.client.remove_object(self.bucket_name, object_name)
             print(f"Successfully deleted {object_name}")
             return True
-            
+
         except S3Error as e:
             print(f"Error deleting {object_name}: {e}")
+            return False
+
+    def delete_session_files(self, session_id: str) -> bool:
+        """删除会话相关的所有文件"""
+        try:
+            # 列出所有相关文件
+            objects = self.list_objects()
+            deleted_count = 0
+
+            for obj_name in objects:
+                # 删除题目文件: data/questions_round_*_{session_id}.json
+                if (obj_name.startswith("data/questions_round_") and
+                    obj_name.endswith(f"_{session_id}.json")):
+                    if self.delete_object(obj_name):
+                        deleted_count += 1
+
+                # 删除分析文件: analysis/qa_complete_*_{session_id}.json
+                elif (obj_name.startswith("analysis/qa_complete_") and
+                      obj_name.endswith(f"_{session_id}.json")):
+                    if self.delete_object(obj_name):
+                        deleted_count += 1
+
+            print(f"Deleted {deleted_count} files for session {session_id}")
+            return True
+
+        except Exception as e:
+            print(f"Error deleting session files: {e}")
             return False
 
 

@@ -63,9 +63,25 @@ class Round(BaseModel):
     questions_count = IntegerField(default=0)
     questions_file_path = CharField()  # MinIO中的文件路径
     round_type = CharField(default='ai_generated')  # ai_generated, manual
-    
+    current_question_index = IntegerField(default=0)  # 当前问题索引
+    status = CharField(default='active')  # active, completed, paused
+
     class Meta:
         table_name = 'rounds'
+
+
+class QuestionAnswer(BaseModel):
+    """问答记录模型"""
+    id = CharField(primary_key=True)
+    round = ForeignKeyField(Round, backref='question_answers')
+    question_index = IntegerField()  # 问题在轮次中的索引
+    question_text = TextField()  # 问题内容
+    answer_text = TextField(null=True)  # 用户回答
+    question_category = CharField(null=True)  # 问题分类
+    is_answered = BooleanField(default=False)  # 是否已回答
+
+    class Meta:
+        table_name = 'question_answers'
 
 
 def create_tables():
@@ -73,7 +89,7 @@ def create_tables():
     if not database.is_closed():
         database.close()
     database.connect()
-    database.create_tables([Room, Session, Round], safe=True)
+    database.create_tables([Room, Session, Round, QuestionAnswer], safe=True)
     database.close()
 
 

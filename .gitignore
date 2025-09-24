@@ -71,3 +71,10 @@ htmlcov/
 *.temp
 ~*
 CLAUDE.md
+# 本地备份命名（不要提交）
+**/*_old*
+**/*.bak
+**/*~
+**/*.tmp
+**/*.temp
+**/*.orig

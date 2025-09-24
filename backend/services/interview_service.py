@@ -109,12 +109,22 @@ class SessionService:
     
     @staticmethod
     def delete_session(session_id: str) -> bool:
-        """删除会话"""
+        """删除会话及其相关数据"""
         try:
             session = Session.get_by_id(session_id)
-            # 删除相关的轮次
+
+            # 删除相关的MinIO文件
+            try:
+                from backend.utils.minio_client import minio_client
+                minio_client.delete_session_files(session_id)
+            except Exception as e:
+                print(f"Warning: Failed to delete MinIO files for session {session_id}: {e}")
+
+            # 删除相关的轮次（会自动删除MinIO文件和QuestionAnswer记录）
             for round_obj in session.rounds:
                 RoundService.delete_round(round_obj.id)
+
+            # 删除会话记录
             session.delete_instance()
             return True
         except Session.DoesNotExist:
@@ -172,7 +182,9 @@ class RoundService:
             round_index=round_index,
             questions_count=len(questions),
             questions_file_path=questions_file_path,
-            round_type=round_type
+            round_type=round_type,
+            current_question_index=0,
+            status='active'
         )
         return round_obj
     
@@ -194,13 +206,41 @@ class RoundService:
     
     @staticmethod
     def delete_round(round_id: str) -> bool:
-        """删除轮次"""
+        """删除轮次及其相关数据"""
         try:
             round_obj = Round.get_by_id(round_id)
+
+            # 删除相关的MinIO文件
+            RoundService._delete_round_files(round_obj)
+
+            # 删除相关的QuestionAnswer记录
+            from backend.models.models import QuestionAnswer
+            QuestionAnswer.delete().where(QuestionAnswer.round == round_obj).execute()
+
+            # 删除Round记录
             round_obj.delete_instance()
             return True
         except Round.DoesNotExist:
             return False
+
+    @staticmethod
+    def _delete_round_files(round_obj: Round):
+        """删除轮次相关的MinIO文件"""
+        try:
+            from backend.utils.minio_client import minio_client
+
+            # 删除题目文件: data/questions_round_{index}_{session_id}.json
+            questions_file = f"data/questions_round_{round_obj.round_index}_{round_obj.session.id}.json"
+            minio_client.delete_object(questions_file)
+            print(f"Deleted questions file: {questions_file}")
+
+            # 删除分析文件: analysis/qa_complete_{round_index}_{session_id}.json
+            analysis_file = f"analysis/qa_complete_{round_obj.round_index}_{round_obj.session.id}.json"
+            minio_client.delete_object(analysis_file)
+            print(f"Deleted analysis file: {analysis_file}")
+
+        except Exception as e:
+            print(f"Error deleting round files: {e}")
     
     @staticmethod
     def to_dict(round_obj: Round) -> Dict[str, Any]:
