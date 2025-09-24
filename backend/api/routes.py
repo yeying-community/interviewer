@@ -6,6 +6,9 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from backend.services.interview_service import RoomService, SessionService, RoundService
 from backend.utils.minio_client import download_resume_data, minio_client
 
+# === digitalhub 客户端 & os ===
+from backend.services.digitalhub_client import ping_dh, boot_dh, start_llm
+import os
 
 # 创建蓝图
 main_bp = Blueprint('main', __name__)
@@ -49,6 +52,12 @@ def index():
 @main_bp.route('/create_room')
 def create_room():
     """创建新的面试间"""
+    # 进入创建面试间时，静默 ping 数字人
+    try:
+        ping_dh()
+    except Exception:
+        pass
+
     room = RoomService.create_room()
     return redirect(url_for('main.room_detail', room_id=room.id))
 
@@ -56,6 +65,12 @@ def create_room():
 @main_bp.route('/room/<room_id>')
 def room_detail(room_id):
     """面试间详情页面"""
+    # 点击已有面试间时，静默 ping 数字人
+    try:
+        ping_dh()
+    except Exception:
+        pass
+
     room = RoomService.get_room(room_id)
     if not room:
         return "面试间不存在", 404
@@ -75,16 +90,28 @@ def create_session(room_id):
     if not session:
         return "面试间不存在", 404
 
+    # 变更：创建会话后，不再跳数字人；跳回会话页，由会话页触发启动并展示链接
     return redirect(url_for('main.session_detail', session_id=session.id))
 
 
 @main_bp.route('/session/<session_id>')
 def session_detail(session_id):
-    """面试会话详情页面"""
+    """面试会话详情页面（进入此页时启动数字人，并把提示作为AI消息插入）"""
     session = SessionService.get_session(session_id)
     if not session:
         return "面试会话不存在", 404
-    
+
+    # 进入会话页时，启动数字人（已在运行则复用），拿到提示文案与链接
+    dh_message, dh_connect_url = None, None
+    try:
+        public_host = os.getenv("PUBLIC_HOST")
+        resp = boot_dh(session.room_id, session.id, public_host=public_host)
+        dh_message = (resp.get("data") or {}).get("message")
+        dh_connect_url = (resp.get("data") or {}).get("connect_url")
+    except Exception as e:
+        # 启动失败不阻塞页面；前端只是不显示那条提示
+        dh_message, dh_connect_url = None, None
+
     rounds = RoundService.get_rounds_by_session(session_id)
     rounds_dict = []
     
@@ -118,12 +145,15 @@ def session_detail(session_id):
     return render_template('session.html',
                          session=SessionService.to_dict(session),
                          rounds=rounds_dict,
-                         resume=resume_data)
+                         resume=resume_data,
+                         # 新增：注入数字人提示与链接，供模板插入AI消息/按钮
+                         dh_message=dh_message,
+                         dh_connect_url=dh_connect_url)
 
 
 @main_bp.route('/generate_questions/<session_id>', methods=['POST'])
 def generate_questions(session_id):
-    """生成面试题"""
+    """生成面试题 + 启动 LLM Round Server"""
     session = SessionService.get_session(session_id)
     if not session:
         return jsonify({'error': '面试会话不存在'}), 404
@@ -134,6 +164,22 @@ def generate_questions(session_id):
         result = service.generate_questions(session_id)
 
         if result['success']:
+            # 题目生成成功后，启动 LLM（按约定用 session_id/round_index）
+            try:
+                llm_info = start_llm(
+                    session_id=session_id,
+                    round_index=int(result.get('round_index', 0)),
+                    port=int(os.getenv("LLM_PORT", "8011")),
+                    minio_endpoint=os.getenv("MINIO_ENDPOINT", "test-minio.yeying.pub"),
+                    minio_access_key=os.getenv("MINIO_ACCESS_KEY", ""),
+                    minio_secret_key=os.getenv("MINIO_SECRET_KEY", ""),
+                    minio_bucket=os.getenv("MINIO_BUCKET", "yeying-interviewer"),
+                    minio_secure=os.getenv("MINIO_SECURE", "true").lower() == "true",
+                )
+                result['llm'] = llm_info.get('data', llm_info)
+            except Exception as e:
+                result['llm_error'] = str(e)
+
             return jsonify(result)
         else:
             return jsonify({'error': result['error']}), 500

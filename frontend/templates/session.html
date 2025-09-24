@@ -179,7 +179,7 @@
                         
                         <!-- 动态加载的对话轮次 -->
                         {% for round in rounds %}
-                        <div class="round-header">
+                        <div class="round-header" data-round-id="{{ round.id }}">
                             <span>第{{ round.round_index + 1 }}轮面试题</span>
                         </div>
                         
@@ -250,15 +250,23 @@
 
 {% block extra_js %}
 <script>
+// 由后端注入：数字人启动提示与链接（可能为 null）
+const DH_BOOT_MESSAGE = {{ dh_message|tojson|safe if dh_message else 'null' }};
+const DH_CONNECT_URL = {{ dh_connect_url|tojson|safe if dh_connect_url else 'null' }};
+
 // 全局会话ID和当前轮次状态
 const SESSION_ID = '{{ session.id }}';
 let currentRoundId = null;
 let currentQuestionData = null;
 
-// 页面加载完成后滚动到底部
+// 页面加载完成后滚动到底部 + 如果有数字人提示则插入一条AI消息
 $(document).ready(function() {
     scrollToBottom();
     console.log('面试会话页面已加载');
+
+    if (DH_BOOT_MESSAGE) {
+        addMessage('ai', DH_BOOT_MESSAGE);
+    }
 
     // 检查是否有进行中的轮次
     checkActiveRound();
@@ -340,7 +348,6 @@ function addMessage(type, content) {
 
 // 生成面试题
 async function generateQuestions() {
-    // 查找所有生成按钮，优先使用header中的按钮
     const headerButton = document.querySelector('.chat-header button');
     const button = headerButton || (event && event.target && event.target.closest('button'));
     
@@ -350,34 +357,24 @@ async function generateQuestions() {
     }
     
     try {
-        // 显示加载状态
         if (button) {
             button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
             button.disabled = true;
         }
-        
-        // 显示加载指示器
         document.getElementById('typingIndicator').style.display = 'flex';
         scrollToBottom();
         
-        // 调用API生成问题
         const response = await fetch(`/generate_questions/${SESSION_ID}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Content-Type': 'application/json' }
         });
-        
         const data = await response.json();
         
-        // 隐藏加载指示器
         document.getElementById('typingIndicator').style.display = 'none';
         
         if (data.success) {
-            // 设置当前轮次ID
             currentRoundId = data.round_id;
 
-            // 添加轮次标题
             const roundHeader = `
                 <div class="round-header" data-round-id="${data.round_id}">
                     <span>第${data.round_index + 1}轮面试题</span>
@@ -385,12 +382,9 @@ async function generateQuestions() {
             `;
             document.getElementById('chatMessages').insertAdjacentHTML('beforeend', roundHeader);
 
-            // 显示开始消息
             addMessage('ai', `好的！我为您准备了${data.questions.length}道面试题。让我们逐一进行，请仔细回答每一道题目。`);
-
             YeyingInterviewer.showToast('success', `成功生成${data.questions.length}道面试题`);
 
-            // 加载第一个问题
             await loadCurrentQuestion();
         } else {
             YeyingInterviewer.showToast('error', data.error || '生成面试题失败');
@@ -401,7 +395,6 @@ async function generateQuestions() {
         YeyingInterviewer.showToast('error', '网络请求失败，请稍后再试');
         document.getElementById('typingIndicator').style.display = 'none';
     } finally {
-        // 恢复按钮状态
         if (button && originalContent) {
             button.innerHTML = originalContent;
             button.disabled = false;
@@ -420,7 +413,6 @@ async function loadCurrentQuestion() {
         if (data.success && data.question_data) {
             currentQuestionData = data.question_data;
 
-            // 显示当前问题
             const questionHTML = `
                 <div class="current-question-info mb-2">
                     <small class="text-muted">【${data.question_data.category}】问题 ${data.question_data.question_number}/${data.question_data.total_questions}</small>
@@ -433,17 +425,14 @@ async function loadCurrentQuestion() {
 
             addMessage('ai', questionHTML);
 
-            // 更新输入框提示
             const input = document.getElementById('messageInput');
             input.placeholder = `请回答第${data.question_data.question_number}题...`;
             input.focus();
 
         } else {
-            // 没有更多问题了
             currentQuestionData = null;
             addMessage('ai', '🎉 恭喜！您已经完成了本轮所有面试题。您可以生成新的一轮面试题继续练习。');
 
-            // 恢复输入框提示
             const input = document.getElementById('messageInput');
             input.placeholder = '您可以回答面试题或请求生成新的题目...';
         }
@@ -459,30 +448,22 @@ async function saveAnswer(qaId, answerText) {
     try {
         const response = await fetch('/save_answer', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                qa_id: qaId,
-                answer_text: answerText
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ qa_id: qaId, answer_text: answerText })
         });
 
         const data = await response.json();
 
         if (data.success) {
-            // 显示确认消息
             setTimeout(() => {
                 if (data.is_round_completed) {
                     addMessage('ai', '✅ 回答已保存！🎉 您已完成本轮所有面试题，表现出色！');
                     currentQuestionData = null;
 
-                    // 恢复输入框提示
                     const input = document.getElementById('messageInput');
                     input.placeholder = '您可以回答面试题或请求生成新的题目...';
                 } else {
                     addMessage('ai', `✅ 回答已保存！还有 ${data.remaining_questions} 道题，让我们继续下一题。`);
-                    // 加载下一个问题
                     setTimeout(() => loadCurrentQuestion(), 1000);
                 }
             }, 500);
