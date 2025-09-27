@@ -252,6 +252,7 @@ class RoundService:
             'questions_count': round_obj.questions_count,
             'questions_file_path': round_obj.questions_file_path,
             'round_type': round_obj.round_type,
+            'status': round_obj.status,  # 添加status字段
             'created_at': round_obj.created_at.isoformat(),
             'updated_at': round_obj.updated_at.isoformat()
         }
