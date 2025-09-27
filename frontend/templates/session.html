@@ -35,16 +35,54 @@
             flex-direction: column;
             height: auto;
         }
-        
+
         .sidebar {
             width: 100%;
             max-height: 300px;
         }
-        
+
         .chat-area {
             height: calc(100vh - 350px);
         }
     }
+
+    /* 报告按钮样式 */
+    .round-report-actions {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 12px;
+        margin-top: 15px;
+    }
+
+    .round-report-actions .btn {
+        border-radius: 6px;
+        font-size: 0.85rem;
+        padding: 0.375rem 0.75rem;
+    }
+
+    .round-report-actions .btn:hover {
+        transform: translateY(-1px);
+        transition: transform 0.2s ease;
+    }
+
+    /* 报告状态指示器 */
+    .report-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .status-pending { background-color: #ffc107; }
+    .status-completed { background-color: #28a745; }
+    .status-error { background-color: #dc3545; }
 </style>
 {% endblock %}
 
@@ -201,6 +239,24 @@
                                     {% endfor %}
                                 </div>
                                 <div class="message-time">{{ round.created_at[:19]|replace('T', ' ') }}</div>
+
+                                <!-- 轮次报告按钮 -->
+                                {% if round.status == 'completed' %}
+                                <div class="round-report-actions mt-3 pt-3 border-top">
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <small class="text-muted me-2">第{{ round.round_index + 1 }}轮面试报告：</small>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="generateRoundReport('{{ session.id }}', {{ round.round_index }})">
+                                            <i class="fas fa-magic me-1"></i>生成报告
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success" onclick="viewRoundReport('{{ session.id }}', {{ round.round_index }})" style="display: none;" id="viewReportBtn_{{ round.round_index }}">
+                                            <i class="fas fa-eye me-1"></i>查看报告
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-info" onclick="downloadRoundReport('{{ session.id }}', {{ round.round_index }})" style="display: none;" id="downloadReportBtn_{{ round.round_index }}">
+                                            <i class="fas fa-download me-1"></i>下载PDF
+                                        </button>
+                                    </div>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                         {% endfor %}
@@ -482,5 +538,229 @@ async function saveAnswer(qaId, answerText) {
 $(window).on('beforeunload', function() {
     console.log('面试会话页面即将卸载');
 });
+
+// ==================== 报告相关函数 ====================
+
+// 生成轮次报告
+async function generateRoundReport(sessionId, roundIndex) {
+    try {
+        // 显示加载状态
+        YeyingInterviewer.showToast('info', '正在生成面试报告，请稍候...');
+
+        const response = await fetch(`/generate_report/${sessionId}/${roundIndex}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            YeyingInterviewer.showToast('success', '面试报告生成成功！');
+
+            // 显示查看和下载按钮
+            const viewBtn = document.getElementById(`viewReportBtn_${roundIndex}`);
+            const downloadBtn = document.getElementById(`downloadReportBtn_${roundIndex}`);
+
+            if (viewBtn) viewBtn.style.display = 'inline-block';
+            if (downloadBtn) downloadBtn.style.display = 'inline-block';
+
+            // 在聊天中添加成功消息
+            addMessage('ai', `📊 第${roundIndex + 1}轮面试报告生成完成！您可以点击下方按钮查看或下载报告。`);
+
+        } else {
+            YeyingInterviewer.showToast('error', data.error || '生成报告失败');
+        }
+
+    } catch (error) {
+        console.error('生成报告失败:', error);
+        YeyingInterviewer.showToast('error', '网络请求失败，请稍后再试');
+    }
+}
+
+// 查看轮次报告
+async function viewRoundReport(sessionId, roundIndex) {
+    try {
+        const response = await fetch(`/api/reports/${sessionId}/${roundIndex}`);
+        const data = await response.json();
+
+        if (data.success) {
+            // 显示报告详情模态框
+            showReportModal(data.evaluation_data);
+        } else {
+            YeyingInterviewer.showToast('error', data.message || '获取报告失败');
+        }
+
+    } catch (error) {
+        console.error('获取报告失败:', error);
+        YeyingInterviewer.showToast('error', '网络请求失败');
+    }
+}
+
+// 下载轮次报告PDF
+async function downloadRoundReport(sessionId, roundIndex) {
+    try {
+        const downloadUrl = `/api/reports/download/${sessionId}/${roundIndex}`;
+
+        // 创建一个临时的下载链接
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `interview_report_${sessionId}_${roundIndex}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        YeyingInterviewer.showToast('success', 'PDF报告下载开始');
+
+    } catch (error) {
+        console.error('下载报告失败:', error);
+        YeyingInterviewer.showToast('error', '下载失败');
+    }
+}
+
+// 显示报告详情模态框
+function showReportModal(reportData) {
+    const header = reportData.report_header || {};
+    const interviewerComment = reportData.interviewer_comment || {};
+    const comprehensiveAnalysis = reportData.comprehensive_analysis || {};
+
+    const modalHTML = `
+        <div class="modal fade" id="reportModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-file-alt me-2"></i>${header.report_title || '面试报告'}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- 报告头部信息 -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <h2 class="text-primary mb-1">${header.overall_grade || 'B+'}</h2>
+                                        <p class="text-muted mb-0">综合等级</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <h2 class="text-success mb-1">${header.total_score || 7.2}分</h2>
+                                        <p class="text-muted mb-0">综合得分</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 面试官评价 -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-user-tie me-2"></i>面试官点评</h6>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>总体评价：</strong></p>
+                                <p class="text-muted">${interviewerComment.summary || ''}</p>
+                                <p><strong>改进建议：</strong></p>
+                                <p class="text-muted">${interviewerComment.suggestions || ''}</p>
+                            </div>
+                        </div>
+
+                        <!-- 综合分析 -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>综合分析</h6>
+                            </div>
+                            <div class="card-body">
+                                ${Object.entries(comprehensiveAnalysis).map(([key, item]) => `
+                                    <div class="row mb-2">
+                                        <div class="col-4">${getAnalysisLabel(key)}:</div>
+                                        <div class="col-2">
+                                            <span class="badge bg-${getScoreBadgeColor(item.score || 0)}">${item.score || 0}分</span>
+                                        </div>
+                                        <div class="col-6 text-muted small">${item.comment || ''}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="button" class="btn btn-primary" onclick="downloadRoundReport('${reportData.session_info.session_id}', ${reportData.session_info.round_index})">
+                            <i class="fas fa-download me-1"></i>下载PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('reportModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // 添加新的模态框
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+    modal.show();
+}
+
+// 获取分析项目标签
+function getAnalysisLabel(key) {
+    const labels = {
+        'content_completeness': '内容完整度',
+        'highlight_prominence': '亮点突出度',
+        'logical_clarity': '逻辑清晰度',
+        'expression_ability': '表达能力',
+        'position_matching': '岗位契合度'
+    };
+    return labels[key] || key;
+}
+
+// 获取分数对应的badge颜色
+function getScoreBadgeColor(score) {
+    if (score >= 8) return 'success';
+    if (score >= 6) return 'warning';
+    return 'danger';
+}
+
+// 页面加载时检查已有报告状态
+$(document).ready(function() {
+    // 原有的初始化代码...
+
+    // 检查每个轮次的报告状态
+    checkExistingReports();
+});
+
+// 检查已有报告状态
+async function checkExistingReports() {
+    try {
+        const response = await fetch(`/api/reports/list/${SESSION_ID}`);
+        const data = await response.json();
+
+        if (data.success && data.reports) {
+            data.reports.forEach(report => {
+                if (report.evaluation_exists || report.pdf_exists) {
+                    const viewBtn = document.getElementById(`viewReportBtn_${report.round_index}`);
+                    const downloadBtn = document.getElementById(`downloadReportBtn_${report.round_index}`);
+
+                    if (viewBtn && report.evaluation_exists) {
+                        viewBtn.style.display = 'inline-block';
+                    }
+                    if (downloadBtn && report.pdf_exists) {
+                        downloadBtn.style.display = 'inline-block';
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.log('检查报告状态失败:', error);
+    }
+}
 </script>
 {% endblock %}
