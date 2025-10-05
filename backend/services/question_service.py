@@ -23,7 +23,10 @@ class QuestionGenerationService:
             # 加载简历数据
             resume_data = download_resume_data()
             if not resume_data:
-                raise ValueError("无法加载简历数据")
+                return {
+                    'success': False,
+                    'error': '未找到简历数据，请先上传简历'
+                }
             
             # 格式化简历内容
             resume_content = self._format_resume_for_llm(resume_data)

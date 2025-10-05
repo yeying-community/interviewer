@@ -406,20 +406,30 @@ function addMessage(type, content) {
 async function generateQuestions() {
     const headerButton = document.querySelector('.chat-header button');
     const button = headerButton || (event && event.target && event.target.closest('button'));
-    
+
     let originalContent = '';
     if (button) {
         originalContent = button.innerHTML;
     }
-    
+
     try {
+        // 先检查是否有简历数据
+        const resumeCheckResponse = await fetch('/api/resume/current');
+        const resumeCheck = await resumeCheckResponse.json();
+
+        if (!resumeCheck.success) {
+            YeyingInterviewer.showToast('warning', '请先上传简历！');
+            addMessage('ai', '抱歉，系统中还没有简历数据。请先前往<a href="/" style="color: #007bff; text-decoration: underline;">首页</a>上传简历，然后再生成面试题。');
+            return;
+        }
+
         if (button) {
             button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
             button.disabled = true;
         }
         document.getElementById('typingIndicator').style.display = 'flex';
         scrollToBottom();
-        
+
         const response = await fetch(`/generate_questions/${SESSION_ID}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }

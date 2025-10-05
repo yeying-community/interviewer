@@ -154,6 +154,29 @@ class MinIOClient:
             print(f"Error deleting session files: {e}")
             return False
 
+    def get_presigned_url(self, object_name: str, expires_hours: int = 24) -> Optional[str]:
+        """
+        生成预签名URL，允许临时公开访问
+
+        Args:
+            object_name: 对象名称
+            expires_hours: 过期时间（小时）
+
+        Returns:
+            预签名URL，失败返回None
+        """
+        try:
+            from datetime import timedelta
+            url = self.client.presigned_get_object(
+                self.bucket_name,
+                object_name,
+                expires=timedelta(hours=expires_hours)
+            )
+            return url
+        except S3Error as e:
+            print(f"Error generating presigned URL: {e}")
+            return None
+
 
 # 全局MinIO客户端实例
 minio_client = MinIOClient()
@@ -161,12 +184,12 @@ minio_client = MinIOClient()
 
 def upload_resume_data(resume_data: Dict[str, Any]) -> bool:
     """上传简历数据到MinIO"""
-    return minio_client.upload_json("data/resume.json", resume_data)
+    return minio_client.upload_json("resume/resume.json", resume_data)
 
 
 def download_resume_data() -> Optional[Dict[str, Any]]:
     """从MinIO下载简历数据"""
-    return minio_client.download_json("data/resume.json")
+    return minio_client.download_json("resume/resume.json")
 
 
 def upload_questions_data(questions_data: Dict[str, Any], round_index: int) -> bool:

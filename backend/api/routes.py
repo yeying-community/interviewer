@@ -460,3 +460,89 @@ def api_list_session_reports(session_id):
 
     except Exception as e:
         return jsonify({'error': f'获取报告列表失败: {str(e)}'}), 500
+
+
+@main_bp.route('/upload_resume', methods=['POST'])
+def upload_resume():
+    """上传简历PDF并解析为结构化数据"""
+    import tempfile
+    from werkzeug.utils import secure_filename
+
+    try:
+        # 检查是否有文件上传
+        if 'resume' not in request.files:
+            return jsonify({'error': '没有上传文件'}), 400
+
+        file = request.files['resume']
+
+        # 检查文件名
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'}), 400
+
+        # 检查文件类型
+        if not file.filename.lower().endswith('.pdf'):
+            return jsonify({'error': '只支持PDF格式'}), 400
+
+        # 创建临时文件保存上传的PDF
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            temp_path = temp_file.name
+            file.save(temp_path)
+
+        # 调用MinerU服务解析PDF
+        from backend.services.mineru_service import get_mineru_service
+        mineru_service = get_mineru_service()
+
+        markdown_content = mineru_service.parse_pdf(temp_path)
+
+        # 删除临时文件
+        import os
+        os.unlink(temp_path)
+
+        if not markdown_content:
+            return jsonify({'error': 'PDF解析失败，请稍后重试'}), 500
+
+        # 使用LLM从Markdown提取结构化数据
+        from backend.services.resume_parser import get_resume_parser
+        resume_parser = get_resume_parser()
+
+        resume_data = resume_parser.extract_resume_data(markdown_content)
+
+        if not resume_data:
+            return jsonify({'error': '简历数据提取失败'}), 500
+
+        # 保存到MinIO
+        from backend.utils.minio_client import upload_resume_data
+        success = upload_resume_data(resume_data)
+
+        if not success:
+            return jsonify({'error': '简历保存失败'}), 500
+
+        return jsonify({
+            'success': True,
+            'message': '简历上传成功',
+            'resume_data': resume_data
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'上传失败: {str(e)}'}), 500
+
+
+@api_bp.route('/resume/current')
+def api_get_current_resume():
+    """API: 获取当前简历数据"""
+    try:
+        resume_data = download_resume_data()
+
+        if resume_data:
+            return jsonify({
+                'success': True,
+                'resume': resume_data
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '暂无简历数据'
+            }), 404
+
+    except Exception as e:
+        return jsonify({'error': f'获取简历失败: {str(e)}'}), 500
