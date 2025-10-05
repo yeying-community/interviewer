@@ -518,6 +518,9 @@ async function saveAnswer(qaId, answerText) {
 
                     const input = document.getElementById('messageInput');
                     input.placeholder = '您可以回答面试题或请求生成新的题目...';
+
+                    // 🆕 动态显示报告生成按钮
+                    showReportButtons();
                 } else {
                     addMessage('ai', `✅ 回答已保存！还有 ${data.remaining_questions} 道题，让我们继续下一题。`);
                     setTimeout(() => loadCurrentQuestion(), 1000);
@@ -540,6 +543,97 @@ $(window).on('beforeunload', function() {
 });
 
 // ==================== 报告相关函数 ====================
+
+// 动态显示报告按钮（当用户完成所有问题后调用）
+function showReportButtons() {
+    console.log('🔍 showReportButtons 被调用');
+    console.log('currentRoundId:', currentRoundId);
+
+    // 获取当前轮次的 round_id
+    if (!currentRoundId) {
+        console.log('❌ currentRoundId 为空，退出');
+        return;
+    }
+
+    // 查找当前轮次对应的 round-header
+    const roundHeaders = document.querySelectorAll('.round-header');
+    console.log('找到的轮次头部数量:', roundHeaders.length);
+
+    if (roundHeaders.length === 0) {
+        console.log('❌ 未找到轮次头部');
+        return;
+    }
+
+    // 找到当前轮次的 header
+    let currentRoundHeader = null;
+    for (let header of roundHeaders) {
+        if (header.dataset.roundId === currentRoundId) {
+            currentRoundHeader = header;
+            console.log('✅ 找到当前轮次头部');
+            break;
+        }
+    }
+
+    if (!currentRoundHeader) {
+        console.log('❌ 未找到匹配的轮次头部');
+        return;
+    }
+
+    // 找到该轮次头部后的第一个AI消息
+    let targetMessage = currentRoundHeader.nextElementSibling;
+    while (targetMessage && !targetMessage.classList.contains('message')) {
+        targetMessage = targetMessage.nextElementSibling;
+    }
+
+    if (!targetMessage || !targetMessage.classList.contains('ai')) {
+        console.log('❌ 未找到对应的AI消息');
+        return;
+    }
+
+    console.log('✅ 找到目标消息');
+
+    // 检查是否已经有报告按钮
+    if (targetMessage.querySelector('.round-report-actions')) {
+        console.log('⚠️ 报告按钮已存在，不重复添加');
+        return;
+    }
+
+    // 从轮次头部文本中提取轮次索引
+    const roundText = currentRoundHeader.textContent.trim();
+    const roundMatch = roundText.match(/第(\d+)轮/);
+    let roundIndex = roundMatch ? parseInt(roundMatch[1]) - 1 : 0;
+    console.log('轮次索引:', roundIndex, '轮次文本:', roundText);
+
+    // 创建报告按钮HTML
+    const reportActionsHTML = `
+        <div class="round-report-actions mt-3 pt-3 border-top">
+            <div class="d-flex gap-2 align-items-center">
+                <small class="text-muted me-2">第${roundIndex + 1}轮面试报告：</small>
+                <button class="btn btn-sm btn-outline-primary" onclick="generateRoundReport('${SESSION_ID}', ${roundIndex})">
+                    <i class="fas fa-magic me-1"></i>生成报告
+                </button>
+                <button class="btn btn-sm btn-outline-success" onclick="viewRoundReport('${SESSION_ID}', ${roundIndex})" style="display: none;" id="viewReportBtn_${roundIndex}">
+                    <i class="fas fa-eye me-1"></i>查看报告
+                </button>
+                <button class="btn btn-sm btn-outline-info" onclick="downloadRoundReport('${SESSION_ID}', ${roundIndex})" style="display: none;" id="downloadReportBtn_${roundIndex}">
+                    <i class="fas fa-download me-1"></i>下载PDF
+                </button>
+            </div>
+        </div>
+    `;
+
+    // 添加到消息内容中
+    const messageContent = targetMessage.querySelector('.message-content');
+    if (messageContent) {
+        console.log('✅ 正在添加报告按钮到消息中...');
+        messageContent.insertAdjacentHTML('beforeend', reportActionsHTML);
+        scrollToBottom();
+        YeyingInterviewer.showToast('success', '您现在可以生成本轮面试报告了！');
+        console.log('✅ 报告按钮添加成功！');
+    } else {
+        console.log('❌ 未找到 message-content 元素');
+    }
+}
 
 // 生成轮次报告
 async function generateRoundReport(sessionId, roundIndex) {
