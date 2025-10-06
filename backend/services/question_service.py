@@ -9,6 +9,9 @@ from backend.services.interview_service import RoundService
 from backend.models.models import QuestionAnswer
 from backend.utils.minio_client import upload_questions_data, download_resume_data
 from llm.clients.qwen_client import QwenClient
+from backend.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class QuestionGenerationService:
@@ -23,7 +26,10 @@ class QuestionGenerationService:
             # 加载简历数据
             resume_data = download_resume_data()
             if not resume_data:
-                raise ValueError("无法加载简历数据")
+                return {
+                    'success': False,
+                    'error': '未找到简历数据，请先上传简历'
+                }
             
             # 格式化简历内容
             resume_content = self._format_resume_for_llm(resume_data)
@@ -62,7 +68,7 @@ class QuestionGenerationService:
             success = upload_questions_data(qa_data, f"{round_obj.round_index}_{session_id}")
             if not success:
                 # 如果MinIO失败，仍然返回数据，但记录错误
-                print(f"Warning: Failed to save questions to MinIO for round {round_obj.id}")
+                logger.warning(f"Failed to save questions to MinIO for round {round_obj.id}")
             
             return {
                 'success': True,
@@ -73,7 +79,7 @@ class QuestionGenerationService:
             }
             
         except Exception as e:
-            print(f"Error generating questions: {e}")
+            logger.error(f"Error generating questions: {e}", exc_info=True)
             return {
                 'success': False,
                 'error': str(e)
@@ -157,7 +163,7 @@ class QuestionGenerationService:
             return None
 
         except Exception as e:
-            print(f"Error getting current question: {e}")
+            logger.error(f"Error getting current question: {e}", exc_info=True)
             return None
 
     def save_answer(self, qa_id: str, answer_text: str) -> Dict[str, Any]:
@@ -193,7 +199,7 @@ class QuestionGenerationService:
             }
 
         except Exception as e:
-            print(f"Error saving answer: {e}")
+            logger.error(f"Error saving answer: {e}", exc_info=True)
             return {
                 'success': False,
                 'error': str(e)
@@ -249,12 +255,12 @@ class QuestionGenerationService:
             success = minio_client.upload_json(analysis_filename, qa_data)
 
             if success:
-                print(f"✅ Complete QA data saved for LLM analysis: {analysis_filename}")
+                logger.info(f"Complete QA data saved for LLM analysis: {analysis_filename}")
             else:
-                print(f"⚠️ Failed to save QA analysis data: {analysis_filename}")
+                logger.warning(f"Failed to save QA analysis data: {analysis_filename}")
 
         except Exception as e:
-            print(f"Error saving completed QA JSON: {e}")
+            logger.error(f"Error saving completed QA JSON: {e}", exc_info=True)
 
 
 # 延迟初始化全局服务实例
