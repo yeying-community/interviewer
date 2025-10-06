@@ -4,11 +4,15 @@ MinerU PDF解析服务
 
 import os
 import time
+import uuid
 import requests
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+from backend.utils.logger import get_logger
 
 load_dotenv()
+
+logger = get_logger(__name__)
 
 
 class MinerUService:
@@ -40,18 +44,18 @@ class MinerUService:
             # 1. 先上传PDF文件到MinIO并获取URL
             pdf_url = self._upload_pdf_to_minio(pdf_file_path)
             if not pdf_url:
-                print("Failed to upload PDF to storage")
+                logger.error("Failed to upload PDF to storage")
                 return None
 
-            print(f"PDF uploaded to storage: {pdf_url}")
+            logger.info(f"PDF uploaded to storage: {pdf_url}")
 
             # 2. 提交解析任务
             task_id = self._submit_parse_task(pdf_url)
             if not task_id:
-                print("Failed to submit parse task")
+                logger.error("Failed to submit parse task")
                 return None
 
-            print(f"Parse task submitted, task_id: {task_id}")
+            logger.info(f"Parse task submitted, task_id: {task_id}")
 
             # 3. 轮询解析状态并获取结果
             markdown_content = self._poll_parse_result(task_id)
@@ -59,7 +63,7 @@ class MinerUService:
             return markdown_content
 
         except Exception as e:
-            print(f"Error parsing PDF with MinerU: {e}")
+            logger.error(f"Error parsing PDF with MinerU: {e}", exc_info=True)
             return None
 
     def _upload_pdf_to_minio(self, pdf_file_path: str) -> Optional[str]:
@@ -69,17 +73,16 @@ class MinerUService:
 
             # 检查文件是否存在
             if not os.path.exists(pdf_file_path):
-                print(f"PDF file not found: {pdf_file_path}")
+                logger.error(f"PDF file not found: {pdf_file_path}")
                 return None
 
             # 检查文件大小（200MB限制）
             file_size = os.path.getsize(pdf_file_path)
             if file_size > 200 * 1024 * 1024:
-                print(f"PDF file too large: {file_size / (1024*1024):.2f}MB (max 200MB)")
+                logger.error(f"PDF file too large: {file_size / (1024*1024):.2f}MB (max 200MB)")
                 return None
 
             # 上传到MinIO
-            import uuid
             filename = f"temp/resume_{uuid.uuid4().hex}.pdf"
             success = minio_client.upload_file(filename, pdf_file_path)
 
@@ -90,14 +93,14 @@ class MinerUService:
             presigned_url = minio_client.get_presigned_url(filename, expires_hours=24)
 
             if not presigned_url:
-                print("Failed to generate presigned URL")
+                logger.error("Failed to generate presigned URL")
                 return None
 
-            print(f"Generated presigned URL (valid for 24 hours)")
+            logger.info(f"Generated presigned URL (valid for 24 hours)")
             return presigned_url
 
         except Exception as e:
-            print(f"Error uploading PDF to MinIO: {e}")
+            logger.error(f"Error uploading PDF to MinIO: {e}", exc_info=True)
             return None
 
     def _submit_parse_task(self, pdf_url: str) -> Optional[str]:
@@ -115,17 +118,17 @@ class MinerUService:
 
             if response.status_code == 200:
                 result = response.json()
-                print(f"API Response: {result}")
+                logger.debug(f"API Response: {result}")
 
                 # 获取task_id
                 task_id = result.get('data', {}).get('task_id') or result.get('data')
                 return task_id
             else:
-                print(f"Submit task failed: {response.status_code}, {response.text}")
+                logger.error(f"Submit task failed: {response.status_code}, {response.text}")
                 return None
 
         except Exception as e:
-            print(f"Error submitting parse task: {e}")
+            logger.error(f"Error submitting parse task: {e}", exc_info=True)
             return None
 
     def _poll_parse_result(self, task_id: str, max_attempts: int = 60, interval: int = 5) -> Optional[str]:
@@ -147,7 +150,7 @@ class MinerUService:
                 response = requests.get(status_url, headers=self.headers, timeout=30)
 
                 if response.status_code != 200:
-                    print(f"Status check failed: {response.status_code}")
+                    logger.warning(f"Status check failed: {response.status_code}")
                     time.sleep(interval)
                     continue
 
@@ -160,37 +163,37 @@ class MinerUService:
                     progress = data.get('extract_progress', {})
                     extracted = progress.get('extracted_pages', 0)
                     total = progress.get('total_pages', 0)
-                    print(f"Parse status: {state} ({extracted}/{total} pages) (attempt {attempt + 1}/{max_attempts})")
+                    logger.info(f"Parse status: {state} ({extracted}/{total} pages) (attempt {attempt + 1}/{max_attempts})")
                 else:
-                    print(f"Parse status: {state} (attempt {attempt + 1}/{max_attempts})")
+                    logger.info(f"Parse status: {state} (attempt {attempt + 1}/{max_attempts})")
 
                 if state == 'done':
                     # 解析完成，下载ZIP并提取markdown
                     zip_url = data.get('full_zip_url')
                     if not zip_url:
-                        print("No ZIP URL in response")
+                        logger.error("No ZIP URL in response")
                         return None
 
-                    print(f"Downloading result from: {zip_url}")
+                    logger.info(f"Downloading result from: {zip_url}")
                     markdown_content = self._download_and_extract_zip(zip_url)
                     return markdown_content
 
                 elif state == 'failed':
                     err_msg = data.get('err_msg', 'Unknown error')
-                    print(f"Parse failed: {err_msg}")
+                    logger.error(f"Parse failed: {err_msg}")
                     return None
                 elif state in ['pending', 'running', 'converting']:
                     # 继续等待
                     time.sleep(interval)
                 else:
-                    print(f"Unknown state: {state}")
+                    logger.warning(f"Unknown state: {state}")
                     time.sleep(interval)
 
-            print(f"Parse timeout after {max_attempts * interval} seconds")
+            logger.error(f"Parse timeout after {max_attempts * interval} seconds")
             return None
 
         except Exception as e:
-            print(f"Error polling parse result: {e}")
+            logger.error(f"Error polling parse result: {e}", exc_info=True)
             return None
 
     def _download_and_extract_zip(self, zip_url: str) -> Optional[str]:
@@ -200,14 +203,14 @@ class MinerUService:
             import io
 
             # 下载ZIP文件
-            print("Downloading ZIP file...")
+            logger.info("Downloading ZIP file...")
             response = requests.get(zip_url, timeout=60)
 
             if response.status_code != 200:
-                print(f"Failed to download ZIP: {response.status_code}")
+                logger.error(f"Failed to download ZIP: {response.status_code}")
                 return None
 
-            print(f"ZIP file downloaded ({len(response.content)} bytes)")
+            logger.info(f"ZIP file downloaded ({len(response.content)} bytes)")
 
             # 解压ZIP文件
             zip_file = zipfile.ZipFile(io.BytesIO(response.content))
@@ -216,20 +219,20 @@ class MinerUService:
             markdown_files = [f for f in zip_file.namelist() if f.endswith('.md')]
 
             if not markdown_files:
-                print("No markdown file found in ZIP")
+                logger.error("No markdown file found in ZIP")
                 return None
 
             # 读取第一个markdown文件
             md_filename = markdown_files[0]
-            print(f"Extracting markdown from: {md_filename}")
+            logger.info(f"Extracting markdown from: {md_filename}")
 
             markdown_content = zip_file.read(md_filename).decode('utf-8')
-            print(f"Markdown extracted ({len(markdown_content)} characters)")
+            logger.info(f"Markdown extracted ({len(markdown_content)} characters)")
 
             return markdown_content
 
         except Exception as e:
-            print(f"Error downloading/extracting ZIP: {e}")
+            logger.error(f"Error downloading/extracting ZIP: {e}", exc_info=True)
             return None
 
 

@@ -7,6 +7,9 @@ import re
 from typing import Dict, Any, Optional
 from llm.clients.qwen_client import QwenClient
 from llm.prompts.resume_prompts import get_resume_extraction_prompt
+from backend.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ResumeParser:
@@ -33,7 +36,7 @@ class ResumeParser:
         """
         try:
             if not markdown_content or not markdown_content.strip():
-                print("Empty markdown content")
+                logger.error("Empty markdown content")
                 return None
 
             # 生成提取提示词
@@ -44,14 +47,14 @@ class ResumeParser:
             response = self.qwen_client.chat_completion(messages, temperature=0.3, max_tokens=2000)
 
             if not response:
-                print("No response from LLM")
+                logger.error("No response from LLM")
                 return None
 
             # 解析JSON响应
             resume_data = self._parse_json_response(response)
 
             if not resume_data:
-                print("Failed to parse JSON from LLM response")
+                logger.error("Failed to parse JSON from LLM response")
                 return None
 
             # 验证数据完整性
@@ -60,7 +63,7 @@ class ResumeParser:
             return validated_data
 
         except Exception as e:
-            print(f"Error extracting resume data: {e}")
+            logger.error(f"Error extracting resume data: {e}", exc_info=True)
             return None
 
     def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
@@ -82,8 +85,8 @@ class ResumeParser:
             return resume_data
 
         except json.JSONDecodeError as e:
-            print(f"JSON decode error: {e}")
-            print(f"Response content: {response[:500]}")
+            logger.error(f"JSON decode error: {e}")
+            logger.debug(f"Response content: {response[:500]}")
 
             # 尝试使用正则表达式提取JSON对象
             try:
@@ -92,12 +95,12 @@ class ResumeParser:
                     resume_data = json.loads(json_match.group(0))
                     return resume_data
             except Exception as ex:
-                print(f"Regex extraction also failed: {ex}")
+                logger.error(f"Regex extraction also failed: {ex}")
 
             return None
 
         except Exception as e:
-            print(f"Error parsing JSON response: {e}")
+            logger.error(f"Error parsing JSON response: {e}", exc_info=True)
             return None
 
     def _validate_resume_data(self, data: Dict[str, Any]) -> Dict[str, Any]:

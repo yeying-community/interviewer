@@ -5,10 +5,13 @@ API路由模块
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for
 from backend.services.interview_service import RoomService, SessionService, RoundService
 from backend.utils.minio_client import download_resume_data, minio_client
+from backend.utils.logger import get_logger
 
 # === digitalhub 客户端 & os ===
 from backend.services.digitalhub_client import ping_dh, boot_dh, start_llm
 import os
+
+logger = get_logger(__name__)
 
 # 创建蓝图
 main_bp = Blueprint('main', __name__)
@@ -134,7 +137,7 @@ def session_detail(session_id):
             else:
                 round_data['questions'] = []
         except Exception as e:
-            print(f"Error loading questions for round {round_data['id']}: {e}")
+            logger.error(f"Error loading questions for round {round_data['id']}: {e}")
             round_data['questions'] = []
         
         rounds_dict.append(round_data)
@@ -154,6 +157,7 @@ def session_detail(session_id):
 @main_bp.route('/generate_questions/<session_id>', methods=['POST'])
 def generate_questions(session_id):
     """生成面试题 + 启动 LLM Round Server"""
+    logger.debug(f"Incoming request: POST /generate_questions/{session_id} from {request.remote_addr}")
     session = SessionService.get_session(session_id)
     if not session:
         return jsonify({'error': '面试会话不存在'}), 404
@@ -190,6 +194,7 @@ def generate_questions(session_id):
 @main_bp.route('/get_current_question/<round_id>')
 def get_current_question(round_id):
     """获取当前问题"""
+    logger.debug(f"Incoming request: GET /get_current_question/{round_id} from {request.remote_addr}")
     try:
         from backend.services.question_service import get_question_generation_service
         service = get_question_generation_service()
@@ -212,6 +217,7 @@ def get_current_question(round_id):
 @main_bp.route('/save_answer', methods=['POST'])
 def save_answer():
     """保存用户回答"""
+    logger.debug(f"Incoming request: POST /save_answer from {request.remote_addr}")
     try:
         data = request.get_json()
         qa_id = data.get('qa_id')
@@ -233,6 +239,7 @@ def save_answer():
 @main_bp.route('/get_qa_analysis/<session_id>/<int:round_index>')
 def get_qa_analysis(session_id, round_index):
     """获取指定轮次的QA分析数据"""
+    logger.debug(f"Incoming request: GET /get_qa_analysis/{session_id}/{round_index} from {request.remote_addr}")
     try:
         from backend.utils.minio_client import minio_client
 
@@ -260,6 +267,7 @@ def get_qa_analysis(session_id, round_index):
 @api_bp.route('/rooms')
 def api_rooms():
     """API: 获取所有面试间"""
+    logger.debug(f"Incoming request: GET /api/rooms from {request.remote_addr}")
     rooms = RoomService.get_all_rooms()
     return jsonify([RoomService.to_dict(room) for room in rooms])
 
@@ -267,6 +275,7 @@ def api_rooms():
 @api_bp.route('/rooms/<room_id>', methods=['DELETE'])
 def api_delete_room(room_id):
     """API: 删除面试间"""
+    logger.debug(f"Incoming request: DELETE /api/rooms/{room_id} from {request.remote_addr}")
     try:
         success = RoomService.delete_room(room_id)
         if success:
@@ -280,6 +289,7 @@ def api_delete_room(room_id):
 @api_bp.route('/sessions/<session_id>', methods=['DELETE'])
 def api_delete_session(session_id):
     """API: 删除面试会话"""
+    logger.debug(f"Incoming request: DELETE /api/sessions/{session_id} from {request.remote_addr}")
     try:
         success = SessionService.delete_session(session_id)
         if success:
@@ -293,6 +303,7 @@ def api_delete_session(session_id):
 @api_bp.route('/sessions/<room_id>')
 def api_sessions(room_id):
     """API: 获取指定面试间的所有会话"""
+    logger.debug(f"Incoming request: GET /api/sessions/{room_id} from {request.remote_addr}")
     sessions = SessionService.get_sessions_by_room(room_id)
     return jsonify([SessionService.to_dict(session) for session in sessions])
 
@@ -300,6 +311,7 @@ def api_sessions(room_id):
 @api_bp.route('/rounds/<session_id>')
 def api_rounds(session_id):
     """API: 获取指定会话的所有轮次"""
+    logger.debug(f"Incoming request: GET /api/rounds/{session_id} from {request.remote_addr}")
     rounds = RoundService.get_rounds_by_session(session_id)
     return jsonify([RoundService.to_dict(round_obj) for round_obj in rounds])
 
@@ -307,6 +319,7 @@ def api_rounds(session_id):
 @api_bp.route('/minio/test')
 def api_minio_test():
     """API: 测试MinIO连接和数据访问"""
+    logger.debug(f"Incoming request: GET /api/minio/test from {request.remote_addr}")
     try:
         # 测试列出文件
         objects = minio_client.list_objects(prefix="data/")
@@ -331,6 +344,7 @@ def api_minio_test():
 @main_bp.route('/generate_report/<session_id>/<int:round_index>', methods=['POST'])
 def generate_report(session_id, round_index):
     """生成面试评价报告"""
+    logger.debug(f"Incoming request: POST /generate_report/{session_id}/{round_index} from {request.remote_addr}")
     try:
         from backend.services.evaluation_service import get_evaluation_service
         from backend.services.pdf_service import get_pdf_generator
@@ -369,6 +383,7 @@ def generate_report(session_id, round_index):
 @api_bp.route('/reports/<session_id>/<int:round_index>')
 def api_get_report(session_id, round_index):
     """API: 获取指定会话轮次的报告"""
+    logger.debug(f"Incoming request: GET /api/reports/{session_id}/{round_index} from {request.remote_addr}")
     try:
         # 尝试加载评价报告
         evaluation_filename = f"reports/evaluation_{round_index}_{session_id}.json"
@@ -399,6 +414,7 @@ def api_get_report(session_id, round_index):
 @api_bp.route('/reports/download/<session_id>/<int:round_index>')
 def api_download_report_pdf(session_id, round_index):
     """API: 下载PDF报告"""
+    logger.debug(f"Incoming request: GET /api/reports/download/{session_id}/{round_index} from {request.remote_addr}")
     try:
         from flask import Response
 
@@ -426,6 +442,7 @@ def api_download_report_pdf(session_id, round_index):
 @api_bp.route('/reports/list/<session_id>')
 def api_list_session_reports(session_id):
     """API: 列出指定会话的所有报告"""
+    logger.debug(f"Incoming request: GET /api/reports/list/{session_id} from {request.remote_addr}")
     try:
         # 获取会话的所有轮次
         rounds = RoundService.get_rounds_by_session(session_id)
@@ -465,6 +482,7 @@ def api_list_session_reports(session_id):
 @main_bp.route('/upload_resume', methods=['POST'])
 def upload_resume():
     """上传简历PDF并解析为结构化数据"""
+    logger.debug(f"Incoming request: POST /upload_resume from {request.remote_addr}")
     import tempfile
     from werkzeug.utils import secure_filename
 
@@ -530,6 +548,7 @@ def upload_resume():
 @api_bp.route('/resume/current')
 def api_get_current_resume():
     """API: 获取当前简历数据"""
+    logger.debug(f"Incoming request: GET /api/resume/current from {request.remote_addr}")
     try:
         resume_data = download_resume_data()
 
