@@ -60,10 +60,12 @@ def init_app():
 if __name__ == '__main__':
     # 初始化应用
     init_app()
-    
+
     # 创建Flask应用
     app = create_app()
-    
+
     # 启动应用
+    # 从环境变量读取 debug 模式，默认关闭（生产环境安全）
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
     print("🚀 Starting Yeying Interviewer System...")
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=debug_mode)

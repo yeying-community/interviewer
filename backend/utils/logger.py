@@ -8,14 +8,14 @@ import os
 from pathlib import Path
 
 
-def setup_logger(name: str, log_file: str = None, level=logging.DEBUG):
+def setup_logger(name: str, log_file: str = None, level=logging.INFO):
     """
     配置并返回logger实例
 
     Args:
         name: logger名称，通常使用模块名 __name__
         log_file: 日志文件路径，如果为None则使用默认路径
-        level: 日志级别，默认为DEBUG
+        level: 日志级别，默认为INFO（生产环境推荐）
 
     Returns:
         配置好的logger实例
