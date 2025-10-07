@@ -8,14 +8,14 @@ import os
 from pathlib import Path
 
 
-def setup_logger(name: str, log_file: str = None, level=logging.INFO):
+def setup_logger(name: str, log_file: str = None, level=None):
     """
     配置并返回logger实例
 
     Args:
         name: logger名称，通常使用模块名 __name__
         log_file: 日志文件路径，如果为None则使用默认路径
-        level: 日志级别，默认为INFO（生产环境推荐）
+        level: 日志级别，如果为None则从环境变量LOG_LEVEL读取，默认INFO
 
     Returns:
         配置好的logger实例
@@ -26,6 +26,11 @@ def setup_logger(name: str, log_file: str = None, level=logging.INFO):
     # 避免重复添加handler
     if logger.handlers:
         return logger
+
+    # 从环境变量读取日志级别，支持开发/生产环境灵活切换
+    if level is None:
+        log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
+        level = getattr(logging, log_level_str, logging.INFO)
 
     logger.setLevel(level)
 
