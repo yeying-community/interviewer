@@ -4,16 +4,51 @@
 
 ## 快速开始
 
-### 环境要求
+### 方式一：Docker 部署（推荐）
 
-- Python 3.11+
+#### 环境要求
+- Docker
+- Docker Compose
 
-### 安装步骤
+#### 部署步骤
 
 ```bash
 # 1. 克隆项目
 git clone <repository-url>
-cd yeying-interviewer
+cd interviewer
+
+# 2. 配置环境变量
+# 编辑 docker-compose.yml，修改以下配置：
+# - QWEN_API_KEY: 你的通义千问 API key
+# - SECRET_KEY: Flask 密钥（随机字符串）
+# - MINERU_API_KEY: MinerU API key
+
+# 3. 构建并启动
+docker-compose up -d
+
+# 4. 查看日志
+docker-compose logs -f
+
+# 5. 停止服务
+docker-compose down
+```
+
+#### 访问应用
+打开浏览器访问：http://localhost:8080
+
+---
+
+### 方式二：本地开发
+
+#### 环境要求
+- Python 3.11+
+
+#### 安装步骤
+
+```bash
+# 1. 克隆项目
+git clone <repository-url>
+cd interviewer
 
 # 2. 安装依赖
 pip install -r requirements.txt
@@ -26,8 +61,7 @@ cp .env.example .env
 python app.py
 ```
 
-### 访问应用
-
+#### 访问应用
 打开浏览器访问：http://localhost:8080
 
 ## 环境配置
