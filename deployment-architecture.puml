@@ -1,0 +1,163 @@
+@startuml Yeying面试官系统 - 部署架构图
+
+!define RECTANGLE class
+
+skinparam {
+  BackgroundColor white
+  ArrowColor #2C3E50
+  BorderColor #34495E
+  ComponentBackgroundColor #ECF0F1
+  ComponentBorderColor #34495E
+  ActorBackgroundColor #3498DB
+  ActorBorderColor #2C3E50
+  DatabaseBackgroundColor #E74C3C
+  DatabaseBorderColor #C0392B
+  CloudBackgroundColor #9B59B6
+  CloudBorderColor #8E44AD
+}
+
+' ============= 用户层 =============
+actor "面试官/用户" as User #LightBlue
+
+' ============= 前端层 =============
+package "前端层 Front-End" #LightYellow {
+  component "Web UI\n(静态资源)" as WebUI
+}
+
+' ============= 应用层 =============
+package "应用服务层 Application Layer" #LightGreen {
+  component "面试官服务\ninterviewer.yeying.com\n:8080\n[Flask + Gunicorn]" as InterviewerService
+  note right of InterviewerService
+    协议: HTTP/HTTPS
+    端口: 8080
+    技术栈: Flask + Python
+    职责:
+    - 简历解析与管理
+    - 面试流程控制
+    - 面试评估与反馈
+    - 数字人服务编排
+  end note
+}
+
+' ============= 核心服务层 =============
+package "核心服务层 Core Services" #LightCyan {
+
+  component "数字人服务\ndigitalhub.yeying.com\n:9009\n[Digital Human]" as DigitalHuman
+  note right of DigitalHuman
+    协议: HTTP/HTTPS
+    端口: 9009
+    职责:
+    - 语音识别与合成
+    - 数字人形象驱动
+    - 实时音视频交互
+  end note
+
+  component "RAG服务\nrag.yeying.com\n:8001\n[向量检索 + 智能题目生成]" as RAGService
+  note right of RAGService
+    协议: HTTP/HTTPS
+    端口: 8001
+    职责:
+    - 简历向量化与语义理解
+    - 知识库检索与匹配
+    - 智能题目生成
+  end note
+}
+
+' ============= 外部服务层 =============
+cloud "外部服务 External Services" #Pink {
+
+  component "通义千问 LLM\nllm-api.yeying.com\n[Qwen API]" as QwenAPI
+  note bottom of QwenAPI
+    协议: HTTPS
+    域名: dashscope.aliyuncs.com
+    职责:
+    - LLM推理能力
+    - 答案评估
+    - 对话理解与生成
+  end note
+
+  component "MinerU API\npdf-parser.yeying.com\n[PDF解析]" as MinerUAPI
+  note bottom of MinerUAPI
+    协议: HTTPS
+    域名: mineru.net
+    职责:
+    - PDF简历解析
+    - 文档结构提取
+  end note
+}
+
+' ============= 存储层 =============
+package "数据存储层 Data Storage" #Wheat {
+
+  database "SQLite DB\n(本地存储)" as SQLiteDB
+  note right of SQLiteDB
+    数据库: SQLite
+    存储内容:
+    - 面试间信息
+    - 会话记录
+    - 题目与答案
+    - 评估结果
+  end note
+
+  component "MinIO\nstorage.yeying.com\n:9000\n[对象存储]" as MinIO
+  note right of MinIO
+    协议: S3 API
+    端口: 9000
+    存储内容:
+    - 简历文件
+    - 录音/录像
+    - 面试资料
+  end note
+
+  folder "本地文件系统\n/logs" as LocalFS
+}
+
+' ============= 关系定义 =============
+
+' 用户层 -> 前端层
+User --> WebUI : HTTPS\n访问界面
+
+' 前端层 -> 应用层
+WebUI --> InterviewerService : HTTP/HTTPS\nRESTful API\n:8080
+
+' 应用层 -> 核心服务层
+InterviewerService --> DigitalHuman : HTTP\n启动数字人\n:9009
+InterviewerService --> RAGService : HTTP\n启动RAG\n:8001
+
+' 应用层 -> 外部服务层
+InterviewerService --> QwenAPI : HTTPS\nLLM推理
+InterviewerService --> MinerUAPI : HTTPS\nPDF解析
+
+' 应用层 -> 存储层
+InterviewerService --> SQLiteDB : SQL\n数据读写
+InterviewerService --> MinIO : S3 API\n文件存储\n:9000
+InterviewerService --> LocalFS : File I/O\n日志/缓存
+
+' 核心服务层 -> 存储层
+DigitalHuman --> MinIO : S3 API\n音视频上传\n:9000
+RAGService --> SQLiteDB : SQL\n向量索引
+RAGService --> MinIO : S3 API\n读取简历文件\n知识库文档\n:9000
+
+' 核心服务层 -> 外部服务层
+DigitalHuman --> QwenAPI : HTTPS\n实时对话
+RAGService --> QwenAPI : HTTPS\n题目生成
+
+' ============= 图例 =============
+legend right
+  |<#LightBlue> 用户层 |
+  |<#LightYellow> 前端层 |
+  |<#LightGreen> 应用服务层 |
+  |<#LightCyan> 核心服务层 |
+  |<#Pink> 外部服务 |
+  |<#Wheat> 数据存储层 |
+
+  **服务域名规划**
+  • interviewer.yeying.com - 主应用服务
+  • digitalhub.yeying.com - 数字人服务
+  • rag.yeying.com - RAG向量检索服务
+  • storage.yeying.com - MinIO对象存储
+  • llm-api.yeying.com - LLM推理服务(内部代理)
+  • pdf-parser.yeying.com - PDF解析服务(内部代理)
+endlegend
+
+@enduml
