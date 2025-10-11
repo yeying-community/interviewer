@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  interviewer:
+    build: .
+    container_name: yeying-interviewer
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      # Qwen API Configuration
+      - QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+      - QWEN_API_KEY=your_qwen_api_key_here
+      - MODEL_NAME=qwen-turbo
+
+      # Flask Configuration
+      - SECRET_KEY=your_secret_key_here
+      - FLASK_DEBUG=false
+      - LOG_LEVEL=INFO
+
+      # Database Configuration
+      - DATABASE_PATH=data/yeying_interviewer.db
+
+      # MinerU API Configuration
+      - MINERU_API_KEY=your_mineru_api_key_here
+      - MINERU_API_URL=https://mineru.net/api/v4
+
+      # MinIO Configuration (optional)
+      # - MINIO_ENDPOINT=your-minio-endpoint
+      # - MINIO_ACCESS_KEY=your-access-key
+      # - MINIO_SECRET_KEY=your-secret-key
+      # - MINIO_BUCKET=your-bucket-name
+    restart: unless-stopped
+    networks:
+      - interviewer-network
+
+networks:
+  interviewer-network:
+    driver: bridge
