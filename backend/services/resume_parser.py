@@ -5,9 +5,9 @@
 import json
 import re
 from typing import Dict, Any, Optional
-from llm.clients.qwen_client import QwenClient
-from llm.prompts.resume_prompts import get_resume_extraction_prompt
-from backend.utils.logger import get_logger
+from backend.clients.llm.qwen_client import QwenClient
+from backend.clients.llm.prompts.resume_prompts import get_resume_extraction_prompt
+from backend.common.logger import get_logger
 
 logger = get_logger(__name__)
 

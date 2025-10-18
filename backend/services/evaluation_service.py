@@ -7,13 +7,16 @@ import json
 import uuid
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from backend.utils.minio_client import minio_client
-from llm.clients.qwen_client import QwenClient
-from llm.prompts.evaluation_prompts import (
+from backend.clients.minio_client import minio_client
+from backend.clients.llm.qwen_client import QwenClient
+from backend.clients.llm.prompts.evaluation_prompts import (
     get_interview_evaluation_prompt,
     get_single_question_evaluation_prompt,
     get_report_summary_prompt
 )
+from backend.common.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class InterviewEvaluationService:
@@ -41,7 +44,7 @@ class InterviewEvaluationService:
             success = minio_client.upload_json(report_filename, report_data)
 
             if success:
-                print(f"Evaluation report saved: {report_filename}")
+                logger.info(f"Evaluation report saved: {report_filename}")
                 return {
                     'success': True,
                     'report_data': report_data,
@@ -51,7 +54,7 @@ class InterviewEvaluationService:
                 raise Exception("保存评价报告失败")
 
         except Exception as e:
-            print(f"Error generating evaluation report: {e}")
+            logger.error(f"Error generating evaluation report: {e}", exc_info=True)
             return {
                 'success': False,
                 'error': str(e)
@@ -59,8 +62,17 @@ class InterviewEvaluationService:
 
     def _load_qa_data(self, session_id: str, round_index: int) -> Optional[Dict[str, Any]]:
         """加载QA完成数据"""
-        analysis_filename = f"analysis/qa_complete_{round_index}_{session_id}.json"
-        return minio_client.download_json(analysis_filename)
+        # 获取session对应的room_id
+        from backend.services.interview_service import SessionService
+        session = SessionService.get_session(session_id)
+        if not session:
+            return None
+
+        room_id = session.room.id
+
+        # 使用新的路径结构
+        from backend.clients.minio_client import download_qa_analysis
+        return download_qa_analysis(room_id, session_id, round_index)
 
     def _evaluate_with_llm(self, qa_data: Dict[str, Any]) -> Dict[str, Any]:
         """使用大模型评价QA数据"""
@@ -75,7 +87,7 @@ class InterviewEvaluationService:
             return self._parse_evaluation_response(response)
 
         except Exception as e:
-            print(f"Error in LLM evaluation: {e}")
+            logger.error(f"Error in LLM evaluation: {e}", exc_info=True)
             # 返回默认评价结果
             return self._get_default_evaluation()
 
@@ -94,7 +106,7 @@ class InterviewEvaluationService:
             return evaluation_data
 
         except json.JSONDecodeError as e:
-            print(f"Failed to parse LLM response as JSON: {e}")
+            logger.error(f"Failed to parse LLM response as JSON: {e}", exc_info=True)
             return self._get_default_evaluation()
 
     def _get_default_evaluation(self) -> Dict[str, Any]:
@@ -205,7 +217,7 @@ class InterviewEvaluationService:
 
             return self._parse_evaluation_response(response)
         except Exception as e:
-            print(f"Error evaluating single question: {e}")
+            logger.error(f"Error evaluating single question: {e}", exc_info=True)
             return None
 
 

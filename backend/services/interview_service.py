@@ -5,6 +5,9 @@
 import uuid
 from typing import List, Optional, Dict, Any
 from backend.models.models import Room, Session, Round
+from backend.common.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class RoomService:
@@ -115,10 +118,10 @@ class SessionService:
 
             # 删除相关的MinIO文件
             try:
-                from backend.utils.minio_client import minio_client
+                from backend.clients.minio_client import minio_client
                 minio_client.delete_session_files(session_id)
             except Exception as e:
-                print(f"Warning: Failed to delete MinIO files for session {session_id}: {e}")
+                logger.warning(f"Failed to delete MinIO files for session {session_id}: {e}")
 
             # 删除相关的轮次（会自动删除MinIO文件和QuestionAnswer记录）
             for round_obj in session.rounds:
@@ -227,20 +230,20 @@ class RoundService:
     def _delete_round_files(round_obj: Round):
         """删除轮次相关的MinIO文件"""
         try:
-            from backend.utils.minio_client import minio_client
+            from backend.clients.minio_client import minio_client
 
             # 删除题目文件: data/questions_round_{index}_{session_id}.json
             questions_file = f"data/questions_round_{round_obj.round_index}_{round_obj.session.id}.json"
             minio_client.delete_object(questions_file)
-            print(f"Deleted questions file: {questions_file}")
+            logger.info(f"Deleted questions file: {questions_file}")
 
             # 删除分析文件: analysis/qa_complete_{round_index}_{session_id}.json
             analysis_file = f"analysis/qa_complete_{round_obj.round_index}_{round_obj.session.id}.json"
             minio_client.delete_object(analysis_file)
-            print(f"Deleted analysis file: {analysis_file}")
+            logger.info(f"Deleted analysis file: {analysis_file}")
 
         except Exception as e:
-            print(f"Error deleting round files: {e}")
+            logger.error(f"Error deleting round files: {e}")
     
     @staticmethod
     def to_dict(round_obj: Round) -> Dict[str, Any]:

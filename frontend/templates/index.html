@@ -15,23 +15,13 @@
                 <p class="text-muted mb-0">基于RAG技术的AI智能面试助手</p>
             </div>
             <div>
-                <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#uploadResumeModal">
-                    <i class="fas fa-upload me-1"></i>
-                    上传简历
-                </button>
-                <a href="{{ url_for('main.create_room') }}" class="btn btn-primary">
+                <a href="{{ url_for('room.create_room') }}" class="btn btn-primary">
                     <i class="fas fa-plus me-1"></i>
                     创建面试间
                 </a>
             </div>
         </div>
 
-        <!-- 简历状态提示 -->
-        <div id="resumeStatus" class="alert alert-info d-flex align-items-center mb-4" style="display: none !important;">
-            <i class="fas fa-info-circle me-2"></i>
-            <span id="resumeStatusText">正在检查简历状态...</span>
-        </div>
-        
         <!-- 系统介绍 -->
         {% if not rooms %}
         <div class="row mb-5">
@@ -97,7 +87,7 @@
                         </div>
                         
                         <div class="mt-4">
-                            <a href="{{ url_for('main.create_room') }}" class="btn btn-primary btn-lg">
+                            <a href="{{ url_for('room.create_room') }}" class="btn btn-primary btn-lg">
                                 <i class="fas fa-rocket me-2"></i>
                                 开始创建面试间
                             </a>
@@ -142,7 +132,7 @@
                         </div>
                     </div>
 
-                    <div class="card-body" onclick="location.href='{{ url_for('main.room_detail', room_id=room.id) }}'">
+                    <div class="card-body" onclick="location.href='{{ url_for('room.room_detail', room_id=room.id) }}'">
                         <div class="mb-2">
                             <strong>Memory ID:</strong>
                             <code class="text-primary">{{ room.memory_id }}</code>
@@ -162,7 +152,7 @@
                         </div>
                     </div>
 
-                    <div class="card-footer bg-transparent" onclick="location.href='{{ url_for('main.room_detail', room_id=room.id) }}'">
+                    <div class="card-footer bg-transparent" onclick="location.href='{{ url_for('room.room_detail', room_id=room.id) }}'">
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted">
                                 <i class="fas fa-clock me-1"></i>
@@ -234,181 +224,4 @@
         {% endif %}
     </div>
 </div>
-
-<!-- 上传简历模态框 -->
-<div class="modal fade" id="uploadResumeModal" tabindex="-1" aria-labelledby="uploadResumeModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="uploadResumeModalLabel">
-                    <i class="fas fa-file-pdf me-2"></i>
-                    上传简历
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="uploadResumeForm" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <label for="resumeFile" class="form-label">选择PDF简历文件</label>
-                        <input type="file" class="form-control" id="resumeFile" name="resume" accept=".pdf" required>
-                        <div class="form-text">
-                            <i class="fas fa-info-circle me-1"></i>
-                            支持PDF格式，最大200MB
-                        </div>
-                    </div>
-
-                    <!-- 上传进度 -->
-                    <div id="uploadProgress" class="mb-3" style="display: none;">
-                        <div class="progress">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%">
-                                正在解析PDF，请稍候...
-                            </div>
-                        </div>
-                        <small class="text-muted d-block mt-2">
-                            <i class="fas fa-spinner fa-spin me-1"></i>
-                            PDF解析可能需要几秒到几分钟时间，请耐心等待
-                        </small>
-                    </div>
-
-                    <!-- 成功提示 -->
-                    <div id="uploadSuccess" class="alert alert-success" style="display: none;">
-                        <i class="fas fa-check-circle me-2"></i>
-                        <span id="successMessage">简历上传成功！</span>
-                    </div>
-
-                    <!-- 错误提示 -->
-                    <div id="uploadError" class="alert alert-danger" style="display: none;">
-                        <i class="fas fa-exclamation-circle me-2"></i>
-                        <span id="errorMessage"></span>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" id="uploadResumeBtn">
-                    <i class="fas fa-upload me-1"></i>
-                    上传并解析
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-// 页面加载时检查简历状态
-document.addEventListener('DOMContentLoaded', async function() {
-    try {
-        const response = await fetch('/api/resume/current');
-        const result = await response.json();
-
-        const statusDiv = document.getElementById('resumeStatus');
-        const statusText = document.getElementById('resumeStatusText');
-
-        if (result.success && result.resume) {
-            statusDiv.className = 'alert alert-success d-flex align-items-center mb-4';
-            statusDiv.style.display = 'flex';
-            statusText.innerHTML = `<strong>✓ 已有简历：</strong> ${result.resume.name || '未知'} - ${result.resume.position || '职位未知'}`;
-        } else {
-            statusDiv.className = 'alert alert-warning d-flex align-items-center mb-4';
-            statusDiv.style.display = 'flex';
-            statusText.innerHTML = '<strong>⚠ 尚未上传简历</strong> - 请先上传简历后再创建面试间';
-        }
-    } catch (error) {
-        console.error('检查简历状态失败:', error);
-    }
-});
-
-document.getElementById('uploadResumeBtn').addEventListener('click', async function() {
-    const fileInput = document.getElementById('resumeFile');
-    const uploadProgress = document.getElementById('uploadProgress');
-    const uploadSuccess = document.getElementById('uploadSuccess');
-    const uploadError = document.getElementById('uploadError');
-    const uploadBtn = this;
-
-    // 验证文件
-    if (!fileInput.files || !fileInput.files[0]) {
-        uploadError.querySelector('#errorMessage').textContent = '请选择PDF文件';
-        uploadError.style.display = 'block';
-        return;
-    }
-
-    const file = fileInput.files[0];
-
-    // 验证文件类型
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-        uploadError.querySelector('#errorMessage').textContent = '只支持PDF格式文件';
-        uploadError.style.display = 'block';
-        return;
-    }
-
-    // 验证文件大小（200MB）
-    if (file.size > 200 * 1024 * 1024) {
-        uploadError.querySelector('#errorMessage').textContent = '文件大小超过200MB限制';
-        uploadError.style.display = 'block';
-        return;
-    }
-
-    // 重置提示
-    uploadSuccess.style.display = 'none';
-    uploadError.style.display = 'none';
-
-    // 显示进度
-    uploadProgress.style.display = 'block';
-    uploadBtn.disabled = true;
-    fileInput.disabled = true;
-
-    try {
-        // 创建FormData
-        const formData = new FormData();
-        formData.append('resume', file);
-
-        // 上传文件
-        const response = await fetch('/upload_resume', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            // 上传成功
-            uploadProgress.style.display = 'none';
-            uploadSuccess.querySelector('#successMessage').textContent = result.message || '简历上传成功！';
-            uploadSuccess.style.display = 'block';
-
-            // 3秒后关闭模态框并刷新页面
-            setTimeout(() => {
-                const modal = bootstrap.Modal.getInstance(document.getElementById('uploadResumeModal'));
-                modal.hide();
-                // 可选：刷新页面或更新简历显示
-                location.reload();
-            }, 2000);
-        } else {
-            // 上传失败
-            uploadProgress.style.display = 'none';
-            uploadError.querySelector('#errorMessage').textContent = result.error || '上传失败';
-            uploadError.style.display = 'block';
-            uploadBtn.disabled = false;
-            fileInput.disabled = false;
-        }
-    } catch (error) {
-        // 网络错误
-        uploadProgress.style.display = 'none';
-        uploadError.querySelector('#errorMessage').textContent = '网络错误: ' + error.message;
-        uploadError.style.display = 'block';
-        uploadBtn.disabled = false;
-        fileInput.disabled = false;
-    }
-});
-
-// 重置表单
-document.getElementById('uploadResumeModal').addEventListener('hidden.bs.modal', function() {
-    document.getElementById('uploadResumeForm').reset();
-    document.getElementById('uploadProgress').style.display = 'none';
-    document.getElementById('uploadSuccess').style.display = 'none';
-    document.getElementById('uploadError').style.display = 'none';
-    document.getElementById('uploadResumeBtn').disabled = false;
-    document.getElementById('resumeFile').disabled = false;
-});
-</script>
 {% endblock %}

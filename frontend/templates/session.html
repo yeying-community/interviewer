@@ -93,12 +93,12 @@
         <nav aria-label="breadcrumb" class="mb-3">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item">
-                    <a href="{{ url_for('main.index') }}">
+                    <a href="{{ url_for('room.index') }}">
                         <i class="fas fa-home me-1"></i>首页
                     </a>
                 </li>
                 <li class="breadcrumb-item">
-                    <a href="{{ url_for('main.room_detail', room_id=session.room_id) }}">
+                    <a href="{{ url_for('room.room_detail', room_id=session.room_id) }}">
                         <i class="fas fa-door-open me-1"></i>面试间
                     </a>
                 </li>
@@ -194,10 +194,12 @@
                                 <h6 class="mb-0">{{ session.name }}</h6>
                                 <small class="opacity-75">AI智能面试官</small>
                             </div>
-                            <div>
+                            <div class="d-flex gap-2">
                                 <button class="btn btn-sm btn-light" onclick="generateQuestions()">
                                     <i class="fas fa-plus me-1"></i>生成面试题
                                 </button>
+                                <!-- 报告按钮区域 -->
+                                <div id="reportButtonsContainer"></div>
                             </div>
                         </div>
                     </div>
@@ -220,43 +222,31 @@
                         <div class="round-header" data-round-id="{{ round.id }}">
                             <span>第{{ round.round_index + 1 }}轮面试题</span>
                         </div>
-                        
+
                         <!-- AI生成的问题 -->
                         <div class="message ai">
                             <div class="message-avatar">
                                 <i class="fas fa-robot"></i>
                             </div>
                             <div class="message-content">
-                                <div>我为您准备了以下{{ round.questions|length }}道面试题：</div>
-                                <div class="questions-container mt-3">
-                                    {% for question in round.questions %}
-                                    <div class="question-card mb-2">
-                                        <div class="question-text">
-                                            <span class="question-number">{{ loop.index }}.</span>
-                                            {{ question }}
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                <div class="message-time">{{ round.created_at[:19]|replace('T', ' ') }}</div>
-
-                                <!-- 轮次报告按钮 -->
                                 {% if round.status == 'completed' %}
-                                <div class="round-report-actions mt-3 pt-3 border-top">
-                                    <div class="d-flex gap-2 align-items-center">
-                                        <small class="text-muted me-2">第{{ round.round_index + 1 }}轮面试报告：</small>
-                                        <button class="btn btn-sm btn-outline-primary" onclick="generateRoundReport('{{ session.id }}', {{ round.round_index }})">
-                                            <i class="fas fa-magic me-1"></i>生成报告
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-success" onclick="viewRoundReport('{{ session.id }}', {{ round.round_index }})" style="display: none;" id="viewReportBtn_{{ round.round_index }}">
-                                            <i class="fas fa-eye me-1"></i>查看报告
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-info" onclick="downloadRoundReport('{{ session.id }}', {{ round.round_index }})" style="display: none;" id="downloadReportBtn_{{ round.round_index }}">
-                                            <i class="fas fa-download me-1"></i>下载PDF
-                                        </button>
+                                    <!-- 已完成的轮次：显示所有问题 -->
+                                    <div>我为您准备了以下{{ round.questions|length }}道面试题：</div>
+                                    <div class="questions-container mt-3">
+                                        {% for question in round.questions %}
+                                        <div class="question-card mb-2">
+                                            <div class="question-text">
+                                                <span class="question-number">{{ loop.index }}.</span>
+                                                {{ question }}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
                                     </div>
-                                </div>
+                                {% else %}
+                                    <!-- 进行中的轮次：不显示问题列表 -->
+                                    <div>我为您准备了{{ round.questions|length }}道面试题。让我们逐一进行，请仔细回答每一道题目。</div>
                                 {% endif %}
+                                <div class="message-time">{{ round.created_at[:19]|replace('T', ' ') }}</div>
                             </div>
                         </div>
                         {% endfor %}
@@ -310,22 +300,27 @@
 const DH_BOOT_MESSAGE = {{ dh_message|tojson|safe if dh_message else 'null' }};
 const DH_CONNECT_URL = {{ dh_connect_url|tojson|safe if dh_connect_url else 'null' }};
 
-// 全局会话ID和当前轮次状态
+// 全局会话ID、房间ID和当前轮次状态
 const SESSION_ID = '{{ session.id }}';
+const ROOM_ID = '{{ session.room_id }}';
 let currentRoundId = null;
 let currentQuestionData = null;
 
-// 页面加载完成后滚动到底部 + 如果有数字人提示则插入一条AI消息
-$(document).ready(function() {
+// 页面加载完成后初始化
+$(document).ready(async function() {
     scrollToBottom();
     console.log('面试会话页面已加载');
 
+    // 如果有数字人提示则显示
     if (DH_BOOT_MESSAGE) {
         addMessage('ai', DH_BOOT_MESSAGE);
     }
 
     // 检查是否有进行中的轮次
-    checkActiveRound();
+    await checkActiveRound();
+
+    // 检查已有报告状态
+    await checkExistingReports();
 });
 
 // 检查是否有进行中的轮次
@@ -414,10 +409,10 @@ async function generateQuestions() {
 
     try {
         // 先检查是否有简历数据
-        const resumeCheckResponse = await fetch('/api/resume/current');
+        const resumeCheckResponse = await fetch(`/api/resume/${ROOM_ID}`);
         const resumeCheck = await resumeCheckResponse.json();
 
-        if (!resumeCheck.success) {
+        if (!resumeCheck.success || !resumeCheck.data || !resumeCheck.data.resume) {
             YeyingInterviewer.showToast('warning', '请先上传简历！');
             addMessage('ai', '抱歉，系统中还没有简历数据。请先前往<a href="/" style="color: #007bff; text-decoration: underline;">首页</a>上传简历，然后再生成面试题。');
             return;
@@ -434,26 +429,33 @@ async function generateQuestions() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
-        
+
         document.getElementById('typingIndicator').style.display = 'none';
-        
-        if (data.success) {
-            currentRoundId = data.round_id;
+
+        if (data.success && data.data) {
+            // 解构嵌套的数据
+            const result = data.data;
+            currentRoundId = result.round_id;
 
             const roundHeader = `
-                <div class="round-header" data-round-id="${data.round_id}">
-                    <span>第${data.round_index + 1}轮面试题</span>
+                <div class="round-header" data-round-id="${result.round_id}">
+                    <span>第${result.round_index + 1}轮面试题</span>
                 </div>
             `;
             document.getElementById('chatMessages').insertAdjacentHTML('beforeend', roundHeader);
 
-            addMessage('ai', `好的！我为您准备了${data.questions.length}道面试题。让我们逐一进行，请仔细回答每一道题目。`);
-            YeyingInterviewer.showToast('success', `成功生成${data.questions.length}道面试题`);
+            addMessage('ai', `好的！我为您准备了${result.questions.length}道面试题。让我们逐一进行，请仔细回答每一道题目。`);
+            YeyingInterviewer.showToast('success', `成功生成${result.questions.length}道面试题`);
 
             await loadCurrentQuestion();
         } else {
-            YeyingInterviewer.showToast('error', data.error || '生成面试题失败');
+            YeyingInterviewer.showToast('error', data.error || data.message || '生成面试题失败');
         }
         
     } catch (error) {
@@ -476,14 +478,14 @@ async function loadCurrentQuestion() {
         const response = await fetch(`/get_current_question/${currentRoundId}`);
         const data = await response.json();
 
-        if (data.success && data.question_data) {
-            currentQuestionData = data.question_data;
+        if (data.success && data.data && data.data.question_data) {
+            currentQuestionData = data.data.question_data;
 
             const questionHTML = `
                 <div class="current-question-info mb-2">
-                    <small class="text-muted">【${data.question_data.category}】问题 ${data.question_data.question_number}/${data.question_data.total_questions}</small>
+                    <small class="text-muted">【${data.data.question_data.category}】问题 ${data.data.question_data.question_number}/${data.data.question_data.total_questions}</small>
                 </div>
-                <div class="question-text">${data.question_data.question}</div>
+                <div class="question-text">${data.data.question_data.question}</div>
                 <div class="mt-2">
                     <small class="text-info">请在下方输入框中回答这个问题...</small>
                 </div>
@@ -492,7 +494,7 @@ async function loadCurrentQuestion() {
             addMessage('ai', questionHTML);
 
             const input = document.getElementById('messageInput');
-            input.placeholder = `请回答第${data.question_data.question_number}题...`;
+            input.placeholder = `请回答第${data.data.question_data.question_number}题...`;
             input.focus();
 
         } else {
@@ -589,25 +591,6 @@ function showReportButtons() {
         return;
     }
 
-    // 找到该轮次头部后的第一个AI消息
-    let targetMessage = currentRoundHeader.nextElementSibling;
-    while (targetMessage && !targetMessage.classList.contains('message')) {
-        targetMessage = targetMessage.nextElementSibling;
-    }
-
-    if (!targetMessage || !targetMessage.classList.contains('ai')) {
-        console.log('❌ 未找到对应的AI消息');
-        return;
-    }
-
-    console.log('✅ 找到目标消息');
-
-    // 检查是否已经有报告按钮
-    if (targetMessage.querySelector('.round-report-actions')) {
-        console.log('⚠️ 报告按钮已存在，不重复添加');
-        return;
-    }
-
     // 从轮次头部文本中提取轮次索引
     const roundText = currentRoundHeader.textContent.trim();
     const roundMatch = roundText.match(/第(\d+)轮/);
@@ -615,33 +598,29 @@ function showReportButtons() {
     console.log('轮次索引:', roundIndex, '轮次文本:', roundText);
 
     // 创建报告按钮HTML
-    const reportActionsHTML = `
-        <div class="round-report-actions mt-3 pt-3 border-top">
-            <div class="d-flex gap-2 align-items-center">
-                <small class="text-muted me-2">第${roundIndex + 1}轮面试报告：</small>
-                <button class="btn btn-sm btn-outline-primary" onclick="generateRoundReport('${SESSION_ID}', ${roundIndex})">
-                    <i class="fas fa-magic me-1"></i>生成报告
-                </button>
-                <button class="btn btn-sm btn-outline-success" onclick="viewRoundReport('${SESSION_ID}', ${roundIndex})" style="display: none;" id="viewReportBtn_${roundIndex}">
-                    <i class="fas fa-eye me-1"></i>查看报告
-                </button>
-                <button class="btn btn-sm btn-outline-info" onclick="downloadRoundReport('${SESSION_ID}', ${roundIndex})" style="display: none;" id="downloadReportBtn_${roundIndex}">
-                    <i class="fas fa-download me-1"></i>下载PDF
-                </button>
-            </div>
+    const reportButtonsHTML = `
+        <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-primary" onclick="generateRoundReport('${SESSION_ID}', ${roundIndex})" title="生成第${roundIndex + 1}轮报告">
+                <i class="fas fa-magic me-1"></i>生成报告
+            </button>
+            <button class="btn btn-outline-success" onclick="viewRoundReport('${SESSION_ID}', ${roundIndex})" style="display: none;" id="viewReportBtn_${roundIndex}" title="查看报告">
+                <i class="fas fa-eye"></i>
+            </button>
+            <button class="btn btn-outline-info" onclick="downloadRoundReport('${SESSION_ID}', ${roundIndex})" style="display: none;" id="downloadReportBtn_${roundIndex}" title="下载PDF">
+                <i class="fas fa-download"></i>
+            </button>
         </div>
     `;
 
-    // 添加到消息内容中
-    const messageContent = targetMessage.querySelector('.message-content');
-    if (messageContent) {
-        console.log('✅ 正在添加报告按钮到消息中...');
-        messageContent.insertAdjacentHTML('beforeend', reportActionsHTML);
-        scrollToBottom();
+    // 添加到头部按钮容器
+    const container = document.getElementById('reportButtonsContainer');
+    if (container) {
+        console.log('✅ 正在添加报告按钮到头部...');
+        container.innerHTML = reportButtonsHTML;
         YeyingInterviewer.showToast('success', '您现在可以生成本轮面试报告了！');
         console.log('✅ 报告按钮添加成功！');
     } else {
-        console.log('❌ 未找到 message-content 元素');
+        console.log('❌ 未找到 reportButtonsContainer 元素');
     }
 }
 
@@ -651,7 +630,7 @@ async function generateRoundReport(sessionId, roundIndex) {
         // 显示加载状态
         YeyingInterviewer.showToast('info', '正在生成面试报告，请稍候...');
 
-        const response = await fetch(`/generate_report/${sessionId}/${roundIndex}`, {
+        const response = await fetch(`/api/generate_report/${sessionId}/${roundIndex}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -672,7 +651,7 @@ async function generateRoundReport(sessionId, roundIndex) {
             addMessage('ai', `📊 第${roundIndex + 1}轮面试报告生成完成！您可以点击下方按钮查看或下载报告。`);
 
         } else {
-            YeyingInterviewer.showToast('error', data.error || '生成报告失败');
+            YeyingInterviewer.showToast('error', data.error || data.message || '生成报告失败');
         }
 
     } catch (error) {
@@ -685,13 +664,18 @@ async function generateRoundReport(sessionId, roundIndex) {
 async function viewRoundReport(sessionId, roundIndex) {
     try {
         const response = await fetch(`/api/reports/${sessionId}/${roundIndex}`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
 
-        if (data.success) {
+        if (data.success && data.data && data.data.evaluation_data) {
             // 显示报告详情模态框
-            showReportModal(data.evaluation_data);
+            showReportModal(data.data.evaluation_data);
         } else {
-            YeyingInterviewer.showToast('error', data.message || '获取报告失败');
+            YeyingInterviewer.showToast('error', data.error || data.message || '获取报告失败');
         }
 
     } catch (error) {
@@ -723,9 +707,15 @@ async function downloadRoundReport(sessionId, roundIndex) {
 
 // 显示报告详情模态框
 function showReportModal(reportData) {
+    if (!reportData) {
+        YeyingInterviewer.showToast('error', '报告数据无效');
+        return;
+    }
+
     const header = reportData.report_header || {};
     const interviewerComment = reportData.interviewer_comment || {};
     const comprehensiveAnalysis = reportData.comprehensive_analysis || {};
+    const sessionInfo = reportData.session_info || {};
 
     const modalHTML = `
         <div class="modal fade" id="reportModal" tabindex="-1">
@@ -743,7 +733,7 @@ function showReportModal(reportData) {
                             <div class="col-md-6">
                                 <div class="card">
                                     <div class="card-body text-center">
-                                        <h2 class="text-primary mb-1">${header.overall_grade || 'B+'}</h2>
+                                        <h2 class="text-primary mb-1">${header.overall_grade || 'N/A'}</h2>
                                         <p class="text-muted mb-0">综合等级</p>
                                     </div>
                                 </div>
@@ -751,7 +741,7 @@ function showReportModal(reportData) {
                             <div class="col-md-6">
                                 <div class="card">
                                     <div class="card-body text-center">
-                                        <h2 class="text-success mb-1">${header.total_score || 7.2}分</h2>
+                                        <h2 class="text-success mb-1">${header.total_score !== undefined ? header.total_score + '分' : 'N/A'}</h2>
                                         <p class="text-muted mb-0">综合得分</p>
                                     </div>
                                 </div>
@@ -765,9 +755,9 @@ function showReportModal(reportData) {
                             </div>
                             <div class="card-body">
                                 <p><strong>总体评价：</strong></p>
-                                <p class="text-muted">${interviewerComment.summary || ''}</p>
+                                <p class="text-muted">${interviewerComment.summary || '暂无评价'}</p>
                                 <p><strong>改进建议：</strong></p>
-                                <p class="text-muted">${interviewerComment.suggestions || ''}</p>
+                                <p class="text-muted">${interviewerComment.suggestions || '暂无建议'}</p>
                             </div>
                         </div>
 
@@ -791,7 +781,7 @@ function showReportModal(reportData) {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
-                        <button type="button" class="btn btn-primary" onclick="downloadRoundReport('${reportData.session_info.session_id}', ${reportData.session_info.round_index})">
+                        <button type="button" class="btn btn-primary" onclick="downloadRoundReport('${sessionInfo.session_id || SESSION_ID}', ${sessionInfo.round_index !== undefined ? sessionInfo.round_index : 0})">
                             <i class="fas fa-download me-1"></i>下载PDF
                         </button>
                     </div>
@@ -833,22 +823,20 @@ function getScoreBadgeColor(score) {
     return 'danger';
 }
 
-// 页面加载时检查已有报告状态
-$(document).ready(function() {
-    // 原有的初始化代码...
-
-    // 检查每个轮次的报告状态
-    checkExistingReports();
-});
-
 // 检查已有报告状态
 async function checkExistingReports() {
     try {
         const response = await fetch(`/api/reports/list/${SESSION_ID}`);
+
+        if (!response.ok) {
+            console.warn(`Failed to fetch reports list: HTTP ${response.status}`);
+            return;
+        }
+
         const data = await response.json();
 
-        if (data.success && data.reports) {
-            data.reports.forEach(report => {
+        if (data.success && data.data && data.data.reports) {
+            data.data.reports.forEach(report => {
                 if (report.evaluation_exists || report.pdf_exists) {
                     const viewBtn = document.getElementById(`viewReportBtn_${report.round_index}`);
                     const downloadBtn = document.getElementById(`downloadReportBtn_${report.round_index}`);
@@ -861,9 +849,11 @@ async function checkExistingReports() {
                     }
                 }
             });
+        } else if (!data.success) {
+            console.warn('Failed to load existing reports:', data.error || data.message);
         }
     } catch (error) {
-        console.log('检查报告状态失败:', error);
+        console.error('检查报告状态失败:', error);
     }
 }
 </script>

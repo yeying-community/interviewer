@@ -1,8 +1,23 @@
-flask
-python-dotenv
-dashscope
-minio
-peewee
-requests>=2.31
-reportlab>=4.0.0
-pillow>=10.0.0
+# Web框架
+flask==3.0.0
+python-dotenv==1.0.0
+
+# 数据验证
+pydantic==2.5.0
+
+# AI/LLM
+dashscope==1.20.0
+
+# 对象存储
+minio==7.2.0
+
+# 数据库
+peewee==3.17.0
+
+# HTTP请求
+requests==2.31.0
+
+# PDF生成
+reportlab==4.0.7
+pillow==10.1.0
+
