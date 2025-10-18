@@ -7,8 +7,11 @@ from datetime import datetime
 from peewee import *
 import os
 from dotenv import load_dotenv
+from backend.common.logger import get_logger
 
 load_dotenv()
+
+logger = get_logger(__name__)
 
 # 数据库配置
 DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/yeying_interviewer.db')
@@ -84,7 +87,7 @@ class QuestionAnswer(BaseModel):
         table_name = 'question_answers'
 
 
-def create_tables():
+def create_tables() -> None:
     """创建数据库表"""
     if not database.is_closed():
         database.close()
@@ -93,7 +96,7 @@ def create_tables():
     database.close()
 
 
-def init_database():
+def init_database() -> None:
     """初始化数据库"""
     create_tables()
-    print("Database initialized successfully")
+    logger.info("Database initialized successfully")

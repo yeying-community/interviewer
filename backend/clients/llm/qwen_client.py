@@ -53,7 +53,7 @@ class QwenClient:
             }
         
         try:
-            from llm.prompts.question_prompts import get_categorized_interview_prompt
+            from backend.clients.llm.prompts.question_prompts import get_categorized_interview_prompt
         except ImportError:
             raise ImportError("无法导入提示词模块")
         

@@ -12,7 +12,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
-from backend.utils.minio_client import minio_client, download_resume_data, upload_questions_data
+from backend.common.minio_client import minio_client, download_resume_data, upload_questions_data
 
 
 class TestMinIOIntegration(unittest.TestCase):

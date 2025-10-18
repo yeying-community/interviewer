@@ -3,69 +3,114 @@
 """
 Yeying面试官系统 - Flask应用主入口
 
-简洁的应用启动文件，所有业务逻辑已迁移到backend模块
+采用企业级架构，模块化设计
 """
 
 import os
 import sys
+import shutil
 from pathlib import Path
 from flask import Flask
-from dotenv import load_dotenv
+from typing import Tuple, List
 
 # 添加项目路径以支持模块导入
 project_root = Path(__file__).parent
 sys.path.append(str(project_root))
 
-# 加载环境变量
-load_dotenv()
-
-# 导入后端模块
+# 导入配置和中间件
+from backend.common.config import config
+from backend.common.middleware import error_handler, request_logger
 from backend.models.models import init_database
-from backend.api.routes import main_bp, api_bp
+from backend.common.logger import get_logger
+
+# 导入所有控制器
+from backend.controllers.room_controller import room_bp
+from backend.controllers.session_controller import session_bp
+from backend.controllers.question_controller import question_bp
+from backend.controllers.report_controller import report_bp
+from backend.controllers.resume_controller import resume_bp
+from backend.controllers.api_controller import api_bp
+
+logger = get_logger(__name__)
 
 
-def create_app():
+def create_app() -> Flask:
     """创建Flask应用实例"""
-    app = Flask(__name__, 
+    app = Flask(__name__,
                 template_folder='frontend/templates',
                 static_folder='frontend/static')
-    
-    app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')
-    
-    # 注册蓝图
-    app.register_blueprint(main_bp)
+
+    # 使用统一配置
+    app.secret_key = config.SECRET_KEY
+
+    # 注册蓝图（简单直接）
+    app.register_blueprint(room_bp)
+    app.register_blueprint(session_bp)
+    app.register_blueprint(question_bp)
+    app.register_blueprint(report_bp)
+    app.register_blueprint(resume_bp)
     app.register_blueprint(api_bp)
-    
+
+    # 注册中间件
+    error_handler(app)
+    request_logger(app)
+
     return app
 
 
-def init_app():
+def init_app() -> None:
     """初始化应用和数据库"""
-    # 初始化数据库
-    init_database()
-    print("✅ Database initialized")
+    # 验证配置
+    is_valid, missing_configs = config.validate()
+    if not is_valid:
+        logger.error(f"Missing required configurations: {', '.join(missing_configs)}")
+        logger.error("Please check your .env file and set all required environment variables")
+        sys.exit(1)
 
-    # 注释掉自动创建默认面试间的逻辑
-    # # 创建默认数据（如果需要）
-    # try:
-    #     from backend.services.interview_service import RoomService
-    #     rooms = RoomService.get_all_rooms()
-    #     if not rooms:
-    #         default_room = RoomService.create_room("默认面试间")
-    #         print(f"✅ Created default room: {default_room.id}")
-    # except Exception as e:
-    #     print(f"⚠️  Error creating default room: {e}")
+    # 初始化数据库
+    try:
+        init_database()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        sys.exit(1)
 
 
 if __name__ == '__main__':
+    # 确保日志目录存在
+    logs_dir = project_root / 'logs'
+    logs_dir.mkdir(exist_ok=True)
+
     # 初始化应用
+    logger.info("Starting Yeying Interviewer System...")
     init_app()
 
     # 创建Flask应用
     app = create_app()
 
+    # 配置Flask/Werkzeug的日志也输出到文件
+    import logging
+    from logging.handlers import RotatingFileHandler
+
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_handler = RotatingFileHandler(
+        logs_dir / 'interviewer.log',
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+        encoding='utf-8'
+    )
+    werkzeug_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    werkzeug_handler.setFormatter(werkzeug_formatter)
+    werkzeug_logger.addHandler(werkzeug_handler)
+
     # 启动应用
-    # 从环境变量读取 debug 模式，默认关闭（生产环境安全）
-    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
-    print("🚀 Starting Yeying Interviewer System...")
-    app.run(host='0.0.0.0', port=8080, debug=debug_mode)
+    logger.info(f"Server running on http://{config.APP_HOST}:{config.APP_PORT}")
+    logger.info(f"Debug mode: {config.FLASK_DEBUG}")
+    app.run(
+        host=config.APP_HOST,
+        port=config.APP_PORT,
+        debug=config.FLASK_DEBUG
+    )

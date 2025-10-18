@@ -1,5 +1,5 @@
 """
-MinerU PDF解析服务
+MinerU PDF解析服务客户端
 """
 
 import os
@@ -8,23 +8,24 @@ import uuid
 import requests
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
-from backend.utils.logger import get_logger
+from backend.common.logger import get_logger
 
 load_dotenv()
 
 logger = get_logger(__name__)
 
 
-class MinerUService:
-    """MinerU PDF OCR解析服务"""
+class MinerUClient:
+    """MinerU PDF OCR解析客户端"""
 
     def __init__(self):
         self.api_key = os.getenv("MINERU_API_KEY")
-        self.base_url = "https://mineru.net/api/v4"
+        self.base_url = os.getenv("MINERU_API_URL", "https://mineru.net/api/v4")
 
         if not self.api_key:
             raise ValueError("MINERU_API_KEY not found in environment variables")
 
+        # MinerU API 认证格式：Bearer + 空格 + Token
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -69,7 +70,7 @@ class MinerUService:
     def _upload_pdf_to_minio(self, pdf_file_path: str) -> Optional[str]:
         """上传PDF文件到MinIO并返回预签名URL"""
         try:
-            from backend.utils.minio_client import minio_client
+            from backend.clients.minio_client import minio_client
 
             # 检查文件是否存在
             if not os.path.exists(pdf_file_path):
@@ -236,12 +237,12 @@ class MinerUService:
             return None
 
 
-# 全局服务实例
-_mineru_service = None
+# 全局客户端实例
+_mineru_client = None
 
-def get_mineru_service() -> MinerUService:
-    """获取MinerU服务实例（单例模式）"""
-    global _mineru_service
-    if _mineru_service is None:
-        _mineru_service = MinerUService()
-    return _mineru_service
+def get_mineru_client() -> MinerUClient:
+    """获取MinerU客户端实例（单例模式）"""
+    global _mineru_client
+    if _mineru_client is None:
+        _mineru_client = MinerUClient()
+    return _mineru_client
