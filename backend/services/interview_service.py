@@ -12,14 +12,26 @@ logger = get_logger(__name__)
 
 class RoomService:
     """房间管理服务"""
-    
+
     @staticmethod
     def create_room(name: Optional[str] = None) -> Room:
         """创建新的面试间"""
+        from backend.clients.rag.rag_client import get_rag_client
+
         room_id = str(uuid.uuid4())
-        memory_id = f"memory_{room_id[:8]}"
         room_name = name or "面试间"
-        
+
+        # 调用 RAG 服务创建记忆体
+        try:
+            rag_client = get_rag_client()
+            memory_id = rag_client.create_memory(app="interviewer")
+            logger.info(f"Created RAG memory for room {room_id}: {memory_id}")
+        except Exception as e:
+            logger.error(f"Failed to create RAG memory: {e}")
+            # 如果 RAG 服务不可用，使用本地生成的 memory_id
+            memory_id = f"memory_{room_id[:8]}"
+            logger.warning(f"Fallback to local memory_id: {memory_id}")
+
         room = Room.create(
             id=room_id,
             memory_id=memory_id,
