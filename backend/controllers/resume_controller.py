@@ -41,6 +41,9 @@ def upload_resume(room_id: str):
         if not file.filename.lower().endswith('.pdf'):
             return ApiResponse.bad_request('只支持PDF格式')
 
+        # 获取公司信息（可选）
+        company = request.form.get('company', '').strip() or None
+
         # 保存临时文件
         temp_path = _save_temp_file(file)
 
@@ -56,6 +59,11 @@ def upload_resume(room_id: str):
 
             if not resume_data:
                 return ApiResponse.internal_error('简历数据提取失败')
+
+            # 添加公司信息
+            if company:
+                resume_data['company'] = company
+                logger.info(f"Added company to resume: {company}")
 
             # 保存到MinIO（绑定到指定room）
             success = upload_resume_data(resume_data, room_id)

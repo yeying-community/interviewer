@@ -4,12 +4,14 @@
 """
 
 import uuid
+import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from backend.services.interview_service import RoundService
 from backend.models.models import QuestionAnswer
 from backend.clients.minio_client import upload_questions_data, download_resume_data
 from backend.clients.llm.qwen_client import QwenClient
+from backend.clients.rag.rag_client import get_rag_client
 from backend.common.logger import get_logger
 
 logger = get_logger(__name__)
@@ -20,6 +22,7 @@ class QuestionGenerator:
 
     def __init__(self):
         self.qwen_client = QwenClient()
+        self.use_rag = True  # 是否使用 RAG 服务
 
     def generate_questions(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -42,6 +45,7 @@ class QuestionGenerator:
                 }
 
             room_id = session.room.id
+            room = session.room
 
             # 1. 加载简历数据（使用room_id）
             from backend.clients.minio_client import download_resume_data
@@ -52,14 +56,28 @@ class QuestionGenerator:
                     'error': '该面试间还未上传简历，请先上传简历'
                 }
 
-            # 2. 格式化简历内容
-            resume_content = self._format_resume_for_llm(resume_data)
-
-            # 3. 生成分类问题
-            categorized_questions = self.qwen_client.generate_questions(resume_content)
-
-            # 4. 合并所有问题
-            all_questions = self._merge_questions(categorized_questions)
+            # 2. 使用 RAG 生成问题
+            if self.use_rag:
+                try:
+                    questions_result = self._generate_questions_via_rag(
+                        memory_id=room.memory_id,
+                        resume_data=resume_data
+                    )
+                    all_questions = questions_result['questions']
+                    # RAG 返回的问题可能没有分类，统一归类为 "RAG生成"
+                    categorized_questions = {"RAG生成": all_questions}
+                except Exception as e:
+                    logger.error(f"Failed to generate questions via RAG: {e}")
+                    logger.info("Fallback to Qwen client")
+                    # 降级到 Qwen
+                    resume_content = self._format_resume_for_llm(resume_data)
+                    categorized_questions = self.qwen_client.generate_questions(resume_content)
+                    all_questions = self._merge_questions(categorized_questions)
+            else:
+                # 使用原有的 Qwen 方式
+                resume_content = self._format_resume_for_llm(resume_data)
+                categorized_questions = self.qwen_client.generate_questions(resume_content)
+                all_questions = self._merge_questions(categorized_questions)
 
             if not all_questions:
                 raise ValueError("未能生成面试题")
@@ -98,6 +116,36 @@ class QuestionGenerator:
                 'success': False,
                 'error': str(e)
             }
+
+    def _generate_questions_via_rag(
+        self,
+        memory_id: str,
+        resume_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        通过 RAG 服务生成问题
+
+        Args:
+            memory_id: 记忆体ID
+            resume_data: 简历数据
+
+        Returns:
+            包含 questions 列表的字典
+        """
+        rag_client = get_rag_client()
+
+        result = rag_client.generate_questions(
+            memory_id=memory_id,
+            resume_data=resume_data,
+            company=resume_data.get('company'),
+            target_position=resume_data.get('position'),
+            jd_top_k=3,
+            memory_top_k=3,
+            max_chars=4000
+        )
+
+        logger.info(f"Generated {len(result['questions'])} questions via RAG for memory {memory_id}")
+        return result
 
     def _format_resume_for_llm(self, resume_data: Dict[str, Any]) -> str:
         """格式化简历数据供LLM使用"""

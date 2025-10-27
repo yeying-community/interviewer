@@ -3,6 +3,7 @@
 负责管理问题回答、获取当前问题等
 """
 
+import json
 from datetime import datetime
 from typing import Dict, Any, Optional
 from backend.services.interview_service import RoundService
@@ -181,8 +182,57 @@ class AnswerHandler:
 
             if success:
                 logger.info(f"Complete QA data saved for LLM analysis: room={room_id}, session={session_id}, round={round_obj.round_index}")
+
+                # 推送到 RAG 记忆体
+                try:
+                    self._push_to_rag_memory(room_id, session_id, round_obj, qa_data)
+                except Exception as e:
+                    logger.error(f"Failed to push QA data to RAG memory: {e}", exc_info=True)
             else:
                 logger.warning(f"Failed to save QA analysis data")
 
         except Exception as e:
             logger.error(f"Error saving completed QA JSON: {e}", exc_info=True)
+
+    def _push_to_rag_memory(
+        self,
+        room_id: str,
+        session_id: str,
+        round_obj,
+        qa_data: Dict[str, Any]
+    ):
+        """
+        推送问答数据到 RAG 记忆体
+
+        Args:
+            room_id: 面试间ID
+            session_id: 会话ID
+            round_obj: 轮次对象
+            qa_data: 完整的问答数据
+        """
+        from backend.clients.rag.rag_client import get_rag_client
+
+        try:
+            room = round_obj.session.room
+            memory_id = room.memory_id
+
+            # 构建 MinIO 路径作为 URL
+            minio_url = f"rooms/{room_id}/sessions/{session_id}/analysis/round_{round_obj.round_index}.json"
+
+            # 将 qa_data 转换为 JSON 字符串作为 description
+            description = json.dumps(qa_data, ensure_ascii=False)
+
+            # 推送到 RAG
+            rag_client = get_rag_client()
+            result = rag_client.push_message(
+                memory_id=memory_id,
+                url=minio_url,
+                description=description,
+                app="interviewer"
+            )
+
+            logger.info(f"Successfully pushed QA data to RAG memory {memory_id}: {minio_url}")
+
+        except Exception as e:
+            logger.error(f"Error pushing to RAG memory: {e}", exc_info=True)
+            raise

@@ -178,6 +178,15 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="companyInput" class="form-label">目标公司（可选）</label>
+                        <input type="text" class="form-control" id="companyInput" name="company" placeholder="例如：阿里巴巴">
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            填写目标公司后，将结合对应的 JD 生成更精准的面试问题
+                        </div>
+                    </div>
+
                     <!-- 上传进度 -->
                     <div id="uploadProgress" class="mb-3" style="display: none;">
                         <div class="progress">
@@ -241,12 +250,15 @@ async function checkResumeStatus() {
             // 有简历
             statusAlert.classList.remove('d-none', 'alert-warning', 'alert-danger');
             statusAlert.classList.add('alert-success');
+            const companyInfo = result.data.resume.company ?
+                `<p class="mb-1"><strong>目标公司：</strong>${result.data.resume.company}</p>` : '';
             statusContent.innerHTML = `
                 <div>
                     <strong><i class="fas fa-check-circle me-1"></i> 已上传简历</strong>
                     <div class="mt-2">
                         <p class="mb-1"><strong>姓名：</strong>${result.data.resume.name || '未知'}</p>
                         <p class="mb-1"><strong>应聘职位：</strong>${result.data.resume.position || '未知'}</p>
+                        ${companyInfo}
                         <p class="mb-0 text-muted"><small>点击"上传简历"按钮可更新简历</small></p>
                     </div>
                 </div>
@@ -322,6 +334,12 @@ document.getElementById('uploadResumeBtn').addEventListener('click', async funct
         // 创建FormData
         const formData = new FormData();
         formData.append('resume', file);
+
+        // 添加公司信息
+        const companyInput = document.getElementById('companyInput');
+        if (companyInput.value.trim()) {
+            formData.append('company', companyInput.value.trim());
+        }
 
         // 上传文件
         const response = await fetch(`/upload_resume/${ROOM_ID}`, {
