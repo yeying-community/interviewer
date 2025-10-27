@@ -35,8 +35,8 @@ def generate_questions(session_id):
             return ApiResponse.error(result['error'])
 
         # 启动LLM
-        _start_llm_server(session_id, result, result.get('round_index', 0))
-
+        #_start_llm_server(session_id, result, result.get('round_index', 0))
+        _start_llm_server(session_id, session.room.id, result, result.get('round_index', 0))
         return ApiResponse.success(data=result)
 
     except Exception as e:
@@ -113,11 +113,12 @@ def get_qa_analysis(session_id, round_index):
 
 
 # ==================== 私有辅助函数 ====================
-
-def _start_llm_server(session_id, result, round_index):
+def _start_llm_server(session_id: str, room_id: str, result: dict, round_index: int):
+#def _start_llm_server(session_id, result, round_index):
     """启动LLM Round Server"""
     try:
         llm_info = start_llm(
+            room_id=room_id,
             session_id=session_id,
             round_index=int(round_index),
             port=int(os.getenv("LLM_PORT", "8011")),
@@ -131,3 +132,34 @@ def _start_llm_server(session_id, result, round_index):
     except Exception as e:
         logger.warning(f"Failed to start LLM server: {e}")
         result['llm_error'] = str(e)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
