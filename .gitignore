@@ -78,3 +78,5 @@ CLAUDE.md
 **/*.tmp
 **/*.temp
 **/*.orig
+**/*_old_*
+**/*_old.*
