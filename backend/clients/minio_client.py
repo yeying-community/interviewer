@@ -127,7 +127,18 @@ class MinIOClient:
         except S3Error as e:
             logger.error(f"Error listing objects: {e}")
             return []
-    
+
+    def object_exists(self, object_name: str) -> bool:
+        """检查MinIO对象是否存在"""
+        try:
+            self.client.stat_object(self.bucket_name, object_name)
+            return True
+        except S3Error as e:
+            if e.code in {"NoSuchKey", "NoSuchObject", "ObjectNotFound"}:
+                return False
+            logger.error(f"Error stating object {object_name}: {e}")
+            return False
+
     def delete_object(self, object_name: str) -> bool:
         """删除MinIO中的对象"""
         try:
