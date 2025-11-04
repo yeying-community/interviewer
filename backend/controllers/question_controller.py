@@ -4,11 +4,14 @@
 """
 
 import os
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from backend.services.interview_service import SessionService
 from backend.clients.digitalhub_client import start_llm
+from backend.clients.minio_client import minio_client
 from backend.common.response import ApiResponse
 from backend.common.logger import get_logger
+from backend.models.models import Round, database
 
 logger = get_logger(__name__)
 
@@ -110,6 +113,94 @@ def get_qa_analysis(session_id, round_index):
     except Exception as e:
         logger.error(f"Failed to get QA analysis: {e}", exc_info=True)
         return ApiResponse.internal_error(f'获取分析数据失败: {str(e)}')
+
+
+@question_bp.route('/qa_completion/<session_id>/<int:round_index>', methods=['POST'])
+def confirm_qa_completion(session_id, round_index):
+    """确认指定轮次的QA数据已生成"""
+    logger.debug(
+        "Confirming QA completion for session %s round %s", session_id, round_index
+    )
+
+    payload = request.get_json(silent=True) or {}
+    idempotency_key = (
+        request.headers.get('Idempotency-Key')
+        or payload.get('idempotency_key')
+    )
+    event_time = datetime.now().isoformat()
+
+    session_obj = SessionService.get_session(session_id)
+    if not session_obj:
+        logger.warning(
+            "Session not found when confirming QA completion: session=%s",
+            session_id,
+        )
+        return ApiResponse.not_found("面试会话")
+
+    try:
+        round_obj = Round.get(
+            (Round.session == session_obj) & (Round.round_index == round_index)
+        )
+    except Round.DoesNotExist:
+        logger.warning(
+            "Round not found when confirming QA completion: session=%s round=%s",
+            session_id,
+            round_index,
+        )
+        return ApiResponse.not_found("轮次")
+
+    room_id = session_obj.room.id
+    qa_object_path = (
+        f"rooms/{room_id}/sessions/{session_id}/analysis/qa_complete_{round_index}.json"
+    )
+
+    if not minio_client.object_exists(qa_object_path):
+        logger.warning(
+            "QA object missing for session %s round %s at %s (idempotency_key=%s)",
+            session_id,
+            round_index,
+            qa_object_path,
+            idempotency_key,
+        )
+        return jsonify({"error": "qa object missing"}), 409
+
+    try:
+        with database.atomic():
+            round_obj = Round.get_by_id(round_obj.id)
+            if round_obj.status != 'completed':
+                round_obj.status = 'completed'
+                round_obj.save()
+
+                has_active_rounds = Round.select().where(
+                    (Round.session == session_obj) & (Round.status != 'completed')
+                ).exists()
+
+                if not has_active_rounds and session_obj.status != 'completed':
+                    session_obj.status = 'completed'
+                    session_obj.save()
+    except Exception as exc:
+        logger.error(
+            "Failed to update completion status for session %s round %s: %s",
+            session_id,
+            round_index,
+            exc,
+            exc_info=True,
+        )
+        return ApiResponse.internal_error("更新轮次状态失败")
+
+    logger.info(
+        "QA completion confirmed for session %s round %s: path=%s, idempotency_key=%s, timestamp=%s",
+        session_id,
+        round_index,
+        qa_object_path,
+        idempotency_key,
+        event_time,
+    )
+
+    return jsonify({
+        "is_completed": True,
+        "qa_object_path": qa_object_path,
+    })
 
 
 # ==================== 私有辅助函数 ====================
