@@ -321,6 +321,13 @@ $(document).ready(async function() {
 
     // 检查已有报告状态
     await checkExistingReports();
+
+    // === 正式修复：页面加载完成后，自动识别最后一轮并显示【生成报告】按钮 ===
+    const headers = document.querySelectorAll('.round-header');
+    if (headers.length) {
+        currentRoundId = headers[headers.length - 1].dataset.roundId;
+        showReportButtons();
+    }
 });
 
 // 检查是否有进行中的轮次
