@@ -80,3 +80,10 @@ CLAUDE.md
 **/*.orig
 **/*_old_*
 **/*_old.*
+# Python 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+venv.bak/
+env.bak/
