@@ -2,9 +2,11 @@
 面试管理服务
 """
 
+import json
 import uuid
+from datetime import datetime
 from typing import List, Optional, Dict, Any
-from backend.models.models import Room, Session, Round
+from backend.models.models import Room, Session, Round, RoundCompletion
 from backend.common.logger import get_logger
 
 logger = get_logger(__name__)
@@ -12,7 +14,7 @@ logger = get_logger(__name__)
 
 class RoomService:
     """房间管理服务"""
-
+    
     @staticmethod
     def create_room(name: Optional[str] = None) -> Room:
         """创建新的面试间"""
@@ -30,8 +32,7 @@ class RoomService:
             logger.error(f"Failed to create RAG memory: {e}")
             # 如果 RAG 服务不可用，使用本地生成的 memory_id
             memory_id = f"memory_{room_id[:8]}"
-            logger.warning(f"Fallback to local memory_id: {memory_id}")
-
+        
         room = Room.create(
             id=room_id,
             memory_id=memory_id,
@@ -218,6 +219,16 @@ class RoundService:
         if not session:
             return []
         return list(session.rounds.order_by(Round.round_index))
+
+    @staticmethod
+    def get_round_by_session_and_index(session_id: str, round_index: int) -> Optional[Round]:
+        """根据会话和轮次索引获取轮次记录"""
+        session = SessionService.get_session(session_id)
+        if not session:
+            return None
+        return Round.select().where(
+            (Round.session == session) & (Round.round_index == round_index)
+        ).first()
     
     @staticmethod
     def delete_round(round_id: str) -> bool:
@@ -271,3 +282,66 @@ class RoundService:
             'created_at': round_obj.created_at.isoformat(),
             'updated_at': round_obj.updated_at.isoformat()
         }
+
+
+class RoundCompletionService:
+    """轮次完成记录服务"""
+
+    @staticmethod
+    def get_by_idempotency(idempotency_key: str) -> Optional[RoundCompletion]:
+        if not idempotency_key:
+            return None
+        try:
+            return RoundCompletion.get(
+                RoundCompletion.idempotency_key == idempotency_key
+            )
+        except RoundCompletion.DoesNotExist:
+            return None
+
+    @staticmethod
+    def get_by_session_and_index(session: Optional[Session], round_index: int) -> Optional[RoundCompletion]:
+        if not session:
+            return None
+        return RoundCompletion.select().where(
+            (RoundCompletion.session == session) &
+            (RoundCompletion.round_index == round_index)
+        ).first()
+
+    @staticmethod
+    def record_completion(
+        session: Session,
+        round_index: int,
+        *,
+        qa_object: Any,
+        occurred_at: datetime,
+        idempotency_key: str,
+        round_obj: Optional[Round] = None
+    ) -> RoundCompletion:
+        payload = json.dumps(qa_object, ensure_ascii=False) if isinstance(qa_object, (dict, list)) else str(qa_object)
+
+        completion = RoundCompletion.create(
+            id=str(uuid.uuid4()),
+            session=session,
+            round_index=round_index,
+            idempotency_key=idempotency_key,
+            payload=payload,
+            occurred_at=occurred_at
+        )
+
+        logger.info(
+            "Recorded round completion: session=%s, round_index=%s, idempotency_key=%s",
+            session.id,
+            round_index,
+            idempotency_key
+        )
+
+        if round_obj:
+            round_obj.status = 'completed'
+            if round_obj.questions_count is not None:
+                round_obj.current_question_index = max(
+                    round_obj.current_question_index,
+                    round_obj.questions_count
+                )
+            round_obj.save()
+
+        return completion

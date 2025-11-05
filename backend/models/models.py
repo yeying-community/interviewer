@@ -87,12 +87,29 @@ class QuestionAnswer(BaseModel):
         table_name = 'question_answers'
 
 
+class RoundCompletion(BaseModel):
+    """轮次完成记录模型"""
+
+    id = CharField(primary_key=True)
+    session = ForeignKeyField(Session, backref='round_completions')
+    round_index = IntegerField()
+    idempotency_key = CharField(unique=True)
+    payload = TextField()
+    occurred_at = DateTimeField()
+
+    class Meta:
+        table_name = 'round_completions'
+        indexes = (
+            (('session', 'round_index'), True),
+        )
+
+
 def create_tables() -> None:
     """创建数据库表"""
     if not database.is_closed():
         database.close()
     database.connect()
-    database.create_tables([Room, Session, Round, QuestionAnswer], safe=True)
+    database.create_tables([Room, Session, Round, QuestionAnswer, RoundCompletion], safe=True)
     database.close()
 
 
