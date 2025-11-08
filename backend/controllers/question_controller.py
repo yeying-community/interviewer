@@ -47,6 +47,49 @@ def generate_questions(session_id):
         return ApiResponse.internal_error(f'生成面试题失败: {str(e)}')
 
 
+@question_bp.route('/upload_jd/<room_id>', methods=['POST'])
+def upload_jd(room_id: str):
+    """为面试间上传自定义 JD"""
+    logger.debug(f"Uploading JD for room: {room_id}")
+
+    try:
+        # 验证 room 是否存在
+        from backend.services.interview_service import RoomService
+        room = RoomService.get_room(room_id)
+        if not room:
+            return ApiResponse.not_found("面试间")
+
+        data = request.get_json()
+        company = data.get('company')
+        position = data.get('position')
+        content = data.get('content')
+
+        if not content:
+            return ApiResponse.bad_request('JD 内容不能为空')
+
+        from backend.clients.rag.rag_client import get_rag_client
+        rag_client = get_rag_client()
+
+        # 调用 RAG 上传 JD
+        jd_id = rag_client.upload_jd(
+            memory_id=room.memory_id,
+            company=company,
+            position=position,
+            content=content
+        )
+
+        # 保存 jd_id 到 room
+        room.jd_id = jd_id
+        room.save()
+
+        logger.info(f"Successfully uploaded JD for room {room_id}: {jd_id}")
+        return ApiResponse.success(data={'jd_id': jd_id}, message='JD上传成功')
+
+    except Exception as e:
+        logger.error(f"Failed to upload JD: {e}", exc_info=True)
+        return ApiResponse.internal_error(f'上传JD失败: {str(e)}')
+
+
 @question_bp.route('/get_current_question/<round_id>')
 def get_current_question(round_id):
     """获取当前问题"""

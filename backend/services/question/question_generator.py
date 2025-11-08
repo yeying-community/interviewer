@@ -61,7 +61,9 @@ class QuestionGenerator:
                 try:
                     questions_result = self._generate_questions_via_rag(
                         memory_id=room.memory_id,
-                        resume_data=resume_data
+                        resume_data=resume_data,
+                        room_id=room_id,
+                        jd_id=room.jd_id  # 使用面试间的 JD ID
                     )
                     all_questions = questions_result['questions']
                     # RAG 返回的问题可能没有分类，统一归类为 "RAG生成"
@@ -120,25 +122,33 @@ class QuestionGenerator:
     def _generate_questions_via_rag(
         self,
         memory_id: str,
-        resume_data: Dict[str, Any]
+        resume_data: Dict[str, Any],
+        room_id: str,
+        jd_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         通过 RAG 服务生成问题
 
         Args:
             memory_id: 记忆体ID
-            resume_data: 简历数据
+            resume_data: 简历数据（用于提取 company 和 position）
+            room_id: 面试间ID（用于构造 resume_url）
+            jd_id: 面试间上传的 JD ID（可选，优先使用）
 
         Returns:
             包含 questions 列表的字典
         """
         rag_client = get_rag_client()
 
+        # 构造简历在 MinIO 中的路径
+        resume_url = f"rooms/{room_id}/resume.json"
+
         result = rag_client.generate_questions(
             memory_id=memory_id,
-            resume_data=resume_data,
+            resume_url=resume_url,
             company=resume_data.get('company'),
             target_position=resume_data.get('position'),
+            jd_id=jd_id,  # 使用面试间的 JD ID
             jd_top_k=3,
             memory_top_k=3,
             max_chars=4000

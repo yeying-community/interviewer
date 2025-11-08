@@ -120,7 +120,13 @@
                             <i class="fas fa-user-circle fa-3x"></i>
                         </div>
                         <h5 class="mb-1">{{ resume.name }}</h5>
+                        {% if has_custom_jd %}
+                        <p class="mb-0 opacity-75">
+                            <i class="fas fa-file-alt me-1"></i>自定义职位要求
+                        </p>
+                        {% else %}
                         <p class="mb-0 opacity-75">{{ resume.position }}</p>
+                        {% endif %}
                     </div>
                     
                     <div class="candidate-stats">
@@ -292,6 +298,7 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -407,11 +414,9 @@ function addMessage(type, content) {
 // 生成面试题
 async function generateQuestions() {
     const headerButton = document.querySelector('.chat-header button');
-    const button = headerButton || (event && event.target && event.target.closest('button'));
-
     let originalContent = '';
-    if (button) {
-        originalContent = button.innerHTML;
+    if (headerButton) {
+        originalContent = headerButton.innerHTML;
     }
 
     try {
@@ -425,9 +430,9 @@ async function generateQuestions() {
             return;
         }
 
-        if (button) {
-            button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
-            button.disabled = true;
+        if (headerButton) {
+            headerButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
+            headerButton.disabled = true;
         }
         document.getElementById('typingIndicator').style.display = 'flex';
         scrollToBottom();
@@ -464,15 +469,15 @@ async function generateQuestions() {
         } else {
             YeyingInterviewer.showToast('error', data.error || data.message || '生成面试题失败');
         }
-        
+
     } catch (error) {
         console.error('生成面试题失败:', error);
         YeyingInterviewer.showToast('error', '网络请求失败，请稍后再试');
         document.getElementById('typingIndicator').style.display = 'none';
     } finally {
-        if (button && originalContent) {
-            button.innerHTML = originalContent;
-            button.disabled = false;
+        if (headerButton && originalContent) {
+            headerButton.innerHTML = originalContent;
+            headerButton.disabled = false;
         }
     }
 }

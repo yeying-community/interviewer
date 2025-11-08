@@ -65,9 +65,10 @@ class RAGClient:
     def generate_questions(
         self,
         memory_id: str,
-        resume_data: Dict[str, Any],
+        resume_url: str,
         company: Optional[str] = None,
         target_position: Optional[str] = None,
+        jd_id: Optional[str] = None,
         jd_top_k: int = 3,
         memory_top_k: int = 3,
         max_chars: int = 4000
@@ -77,9 +78,10 @@ class RAGClient:
 
         Args:
             memory_id: 记忆体ID
-            resume_data: 简历数据（JSON格式）
-            company: 公司名称
-            target_position: 目标职位
+            resume_url: 简历在MinIO中的路径（如：rooms/{room_id}/resume.json）
+            company: 公司名称（用于JD检索过滤）
+            target_position: 目标职位（用于JD语义检索）
+            jd_id: 用户上传的自定义JD ID（可选，优先使用）
             jd_top_k: JD检索数量
             memory_top_k: 记忆检索数量
             max_chars: 最大字符数
@@ -92,9 +94,10 @@ class RAGClient:
             payload = {
                 "app": "interviewer",
                 "memory_id": memory_id,
-                "query": json.dumps(resume_data, ensure_ascii=False),
+                "resume_url": resume_url,
                 "company": company,
                 "target_position": target_position,
+                "jd_id": jd_id,
                 "jd_top_k": jd_top_k,
                 "memory_top_k": memory_top_k,
                 "max_chars": max_chars
@@ -119,6 +122,51 @@ class RAGClient:
         except requests.RequestException as e:
             logger.error(f"Error generating questions from RAG: {e}", exc_info=True)
             raise Exception(f"Failed to generate questions from RAG: {e}")
+
+    def upload_jd(
+        self,
+        memory_id: str,
+        company: Optional[str] = None,
+        position: Optional[str] = None,
+        content: str = ""
+    ) -> str:
+        """
+        上传自定义 JD
+
+        Args:
+            memory_id: 记忆体ID
+            company: 公司名称
+            position: 职位名称
+            content: JD 内容
+
+        Returns:
+            jd_id: 上传成功后返回的 JD ID
+        """
+        try:
+            url = f"{self.api_url}/query/uploadJD"
+            payload = {
+                "app": "interviewer",
+                "memory_id": memory_id,
+                "company": company,
+                "position": position,
+                "content": content
+            }
+
+            response = requests.post(url, json=payload, timeout=self.timeout)
+            response.raise_for_status()
+
+            result = response.json()
+            jd_id = result.get('jd_id')
+
+            if not jd_id:
+                raise ValueError("No jd_id returned from RAG service")
+
+            logger.info(f"Uploaded JD successfully: {jd_id}")
+            return jd_id
+
+        except requests.RequestException as e:
+            logger.error(f"Error uploading JD to RAG: {e}", exc_info=True)
+            raise Exception(f"Failed to upload JD to RAG: {e}")
 
     def push_message(
         self,
