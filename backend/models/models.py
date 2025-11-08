@@ -42,7 +42,8 @@ class Room(BaseModel):
     id = CharField(primary_key=True)
     memory_id = CharField(unique=True)
     name = CharField(default="面试间")
-    
+    jd_id = CharField(null=True)  # 上传的 JD ID（可选）
+
     class Meta:
         table_name = 'rooms'
 

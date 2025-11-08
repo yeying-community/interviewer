@@ -62,10 +62,14 @@ def session_detail(session_id):
     room_id = session.room.id
     resume_data = download_resume_data(room_id)
 
+    # 检查是否有自定义 JD
+    has_custom_jd = bool(session.room.jd_id)
+
     return render_template('session.html',
                          session=SessionService.to_dict(session),
                          rounds=rounds_dict,
                          resume=resume_data,
+                         has_custom_jd=has_custom_jd,
                          dh_message=dh_message,
                          dh_connect_url=dh_connect_url)
 

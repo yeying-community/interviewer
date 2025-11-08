@@ -32,6 +32,10 @@
                             <i class="fas fa-upload me-1"></i>
                             <span id="uploadBtnText">上传简历</span>
                         </button>
+                        <button type="button" class="btn btn-info btn-sm me-2" data-bs-toggle="modal" data-bs-target="#uploadJDModal">
+                            <i class="fas fa-file-alt me-1"></i>
+                            <span id="uploadJDBtnText">上传JD</span>
+                        </button>
                         <a href="{{ url_for('session.create_session', room_id=room.id) }}" class="btn btn-success btn-sm me-2" id="createSessionBtn">
                             <i class="fas fa-plus me-1"></i>
                             创建会话
@@ -174,16 +178,7 @@
                         <input type="file" class="form-control" id="resumeFile" name="resume" accept=".pdf" required>
                         <div class="form-text">
                             <i class="fas fa-info-circle me-1"></i>
-                            支持PDF格式，最大200MB
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="companyInput" class="form-label">目标公司（可选）</label>
-                        <input type="text" class="form-control" id="companyInput" name="company" placeholder="例如：阿里巴巴">
-                        <div class="form-text">
-                            <i class="fas fa-info-circle me-1"></i>
-                            填写目标公司后，将结合对应的 JD 生成更精准的面试问题
+                            支持PDF格式，最大200MB。如需自定义职位要求，请在上传简历后点击"上传JD"按钮。
                         </div>
                     </div>
 
@@ -218,6 +213,46 @@
                 <button type="button" class="btn btn-primary" id="uploadResumeBtn">
                     <i class="fas fa-upload me-1"></i>
                     上传并解析
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JD 上传模态框 -->
+<div class="modal fade" id="uploadJDModal" tabindex="-1" aria-labelledby="uploadJDModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadJDModalLabel">
+                    <i class="fas fa-file-alt me-2"></i>上传职位描述(JD)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    <i class="fas fa-info-circle me-1"></i>
+                    上传 JD 后，本面试间的所有会话都会使用此 JD 生成面试题。如果不上传，将使用简历中的公司和职位从知识库检索相关 JD。
+                </p>
+                <div class="mb-3">
+                    <label for="jdCompanyInput" class="form-label">公司名称（选填）</label>
+                    <input type="text" class="form-control" id="jdCompanyInput" placeholder="例如：字节跳动">
+                </div>
+                <div class="mb-3">
+                    <label for="jdPositionInput" class="form-label">职位名称（选填）</label>
+                    <input type="text" class="form-control" id="jdPositionInput" placeholder="例如：Java后端开发工程师">
+                </div>
+                <div class="mb-3">
+                    <label for="jdContentInput" class="form-label">职位描述<span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="jdContentInput" rows="10" placeholder="请输入职位描述、岗位要求等信息..." required></textarea>
+                    <small class="text-muted">填写岗位的职责、要求、技能需求等</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="uploadJD()">
+                    <i class="fas fa-upload me-1"></i>
+                    上传 JD
                 </button>
             </div>
         </div>
@@ -335,12 +370,6 @@ document.getElementById('uploadResumeBtn').addEventListener('click', async funct
         const formData = new FormData();
         formData.append('resume', file);
 
-        // 添加公司信息
-        const companyInput = document.getElementById('companyInput');
-        if (companyInput.value.trim()) {
-            formData.append('company', companyInput.value.trim());
-        }
-
         // 上传文件
         const response = await fetch(`/upload_resume/${ROOM_ID}`, {
             method: 'POST',
@@ -388,6 +417,55 @@ document.getElementById('uploadResumeModal').addEventListener('hidden.bs.modal',
     document.getElementById('uploadResumeBtn').disabled = false;
     document.getElementById('resumeFile').disabled = false;
 });
+
+// 上传 JD
+async function uploadJD() {
+    const company = document.getElementById('jdCompanyInput').value.trim();
+    const position = document.getElementById('jdPositionInput').value.trim();
+    const content = document.getElementById('jdContentInput').value.trim();
+
+    if (!content) {
+        YeyingInterviewer.showToast('warning', 'JD 内容不能为空');
+        return;
+    }
+
+    try {
+        YeyingInterviewer.showToast('info', '正在上传 JD...');
+
+        const response = await fetch(`/upload_jd/${ROOM_ID}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                company: company || null,
+                position: position || null,
+                content: content
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            YeyingInterviewer.showToast('success', 'JD 上传成功！本面试间的所有会话将使用此 JD');
+
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('uploadJDModal'));
+            modal.hide();
+
+            // 清空表单
+            document.getElementById('jdCompanyInput').value = '';
+            document.getElementById('jdPositionInput').value = '';
+            document.getElementById('jdContentInput').value = '';
+
+            // 更新按钮文本
+            document.getElementById('uploadJDBtnText').textContent = '更新JD';
+        } else {
+            YeyingInterviewer.showToast('error', data.message || 'JD 上传失败');
+        }
+    } catch (error) {
+        console.error('上传 JD 失败:', error);
+        YeyingInterviewer.showToast('error', '上传 JD 失败');
+    }
+}
 
 // 阻止未上传简历时创建会话
 document.getElementById('createSessionBtn').addEventListener('click', function(e) {
