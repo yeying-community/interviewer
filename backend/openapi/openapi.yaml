@@ -1,0 +1,320 @@
+openapi: 3.0.0
+info:
+  contact:
+    email: yeying.community@gmail.com
+    name: yeying-community
+    url: https://github.com/yeying-community/yeying-idl.git
+  title: Yeying API
+  version: "1.0"
+servers:
+- url: /
+tags:
+- name: Auth
+paths:
+  /api/v1/auth/challenge:
+    post:
+      operationId: auth_challenge
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/authChallengeRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/authChallengeResponse"
+          description: A successful response.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/rpcStatus"
+          description: An unexpected error response.
+      summary: 获取挑战
+      tags:
+      - Auth
+      x-openapi-router-controller: backend.controllers.auth_controller
+  /api/v1/auth/verify:
+    post:
+      operationId: auth_verify
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/authVerifyRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/authVerifyResponse"
+          description: A successful response.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/rpcStatus"
+          description: An unexpected error response.
+      summary: 验证签名
+      tags:
+      - Auth
+      x-openapi-router-controller: backend.controllers.auth_controller
+components:
+  schemas:
+    authChallengeRequest:
+      properties:
+        header:
+          $ref: "#/components/schemas/commonMessageHeader"
+        body:
+          $ref: "#/components/schemas/authChallengeRequestRequestBody"
+      title: authChallengeRequest
+      type: object
+    authChallengeRequestRequestBody:
+      properties:
+        address:
+          title: address
+          type: string
+      title: authChallengeRequestRequestBody
+      type: object
+    authChallengeResponse:
+      example:
+        header:
+          authContent: authContent
+          authType: AUTHENTICATE_TYPE_UNKNOWN
+          nonce: nonce
+          version: 0
+          did: did
+          timestamp: timestamp
+        body:
+          result: result
+          status:
+            code: RESPONSE_CODE_UNKNOWN
+            message: message
+      properties:
+        header:
+          $ref: "#/components/schemas/commonMessageHeader"
+        body:
+          $ref: "#/components/schemas/authChallengeResponseBody"
+      title: authChallengeResponse
+      type: object
+    authChallengeResponseBody:
+      example:
+        result: result
+        status:
+          code: RESPONSE_CODE_UNKNOWN
+          message: message
+      properties:
+        status:
+          $ref: "#/components/schemas/commonResponseStatus"
+        result:
+          title: result
+          type: string
+      title: authChallengeResponseBody
+      type: object
+    authVerifyRequest:
+      properties:
+        header:
+          $ref: "#/components/schemas/commonMessageHeader"
+        body:
+          $ref: "#/components/schemas/authVerifyRequestBody"
+      title: authVerifyRequest
+      type: object
+    authVerifyRequestBody:
+      properties:
+        address:
+          title: address
+          type: string
+        signature:
+          title: signature
+          type: string
+      title: authVerifyRequestBody
+      type: object
+    authVerifyResponse:
+      example:
+        header:
+          authContent: authContent
+          authType: AUTHENTICATE_TYPE_UNKNOWN
+          nonce: nonce
+          version: 0
+          did: did
+          timestamp: timestamp
+        body:
+          status:
+            code: RESPONSE_CODE_UNKNOWN
+            message: message
+          token: token
+      properties:
+        header:
+          $ref: "#/components/schemas/commonMessageHeader"
+        body:
+          $ref: "#/components/schemas/authVerifyResponseBody"
+      title: authVerifyResponse
+      type: object
+    authVerifyResponseBody:
+      example:
+        status:
+          code: RESPONSE_CODE_UNKNOWN
+          message: message
+        token: token
+      properties:
+        status:
+          $ref: "#/components/schemas/commonResponseStatus"
+        token:
+          title: token
+          type: string
+      title: authVerifyResponseBody
+      type: object
+    commonAuthenticateTypeEnum:
+      default: AUTHENTICATE_TYPE_UNKNOWN
+      description: |-
+        - AUTHENTICATE_TYPE_UNKNOWN: 未知编码，是一种占位符
+         - AUTHENTICATE_TYPE_CERT: 基于证书的认证
+         - AUTHENTICATE_TYPE_TOKEN: 基于token的认证
+      enum:
+      - AUTHENTICATE_TYPE_UNKNOWN
+      - AUTHENTICATE_TYPE_CERT
+      - AUTHENTICATE_TYPE_TOKEN
+      title: 鉴权类型
+      type: string
+    commonMessageHeader:
+      example:
+        authContent: authContent
+        authType: AUTHENTICATE_TYPE_UNKNOWN
+        nonce: nonce
+        version: 0
+        did: did
+        timestamp: timestamp
+      properties:
+        did:
+          title: did
+          type: string
+        authType:
+          $ref: "#/components/schemas/commonAuthenticateTypeEnum"
+        authContent:
+          title: authContent
+          type: string
+        nonce:
+          title: nonce
+          type: string
+        timestamp:
+          title: timestamp
+          type: string
+        version:
+          format: int64
+          title: version
+          type: integer
+      title: commonMessageHeader
+      type: object
+    commonResponseCodeEnum:
+      default: RESPONSE_CODE_UNKNOWN
+      description: |-
+        - RESPONSE_CODE_UNKNOWN: 未知编码，是一种占位符
+         - OK: *
+        含义：操作完成
+        使用场景：成功创建、成功提交
+         - INVALID_ARGUMENT: *
+        含义：提供的参数无效或不符合预期
+        使用场景：当接收到客户端请求参数不正确时返回
+         - UNAUTHENTICATED: *
+        含义：请求未通过身份验证
+        使用场景：当请求需要身份验证但未提供有效凭据时返回
+         - PERMISSION_DENIED: *
+        含义：请求无法被执行，因为没有足够的权限
+        使用场景：当客户端没有执行请求所需操作的权限时返回
+         - NOT_FOUND: *
+        含义：请求对象或资源未找到
+        使用场景：当请求的对象或资源不存在时返回
+         - ALREADY_EXISTS: *
+        含义：请求创建的对象已经存在
+        使用场景：当请求创建的对象（如用户、资源等）已经存在时返回
+         - LIMIT_EXCEEDED: *
+        含义：超过了资源使用限制
+        使用场景：当请求操作超过了预先设定的限制时返回
+         - UNAVAILABLE: *
+        含义：请求的服务当前不可用
+        使用场景：当请求的服务不可用（例如服务器维护、过载等）时返回
+         - UNKNOWN_ERROR: *
+        含义：未知错误
+        使用场景：当出现未知错误时返回或无法精确匹配到其他错误码时使用
+         - NETWORK_ERROR: *
+        含义：网络错误
+        使用场景：应为网络错误，无法发送到服务器
+         - INVALID_CERT: *
+        含义：无效证书
+        使用场景：浏览器无法识别证书，在浏览器中添加为受信任证书
+         - NOT_SUPPORTED: *
+        含义：不支持
+        使用场景：接口、服务不支持
+         - DATA_CORRUPTED: *
+        含义：数据损坏
+        使用场景：验证数据的签名不通过，当和存储供应商签约资产时，用户发送到供应商的数据验证签名不通过
+      enum:
+      - RESPONSE_CODE_UNKNOWN
+      - OK
+      - INVALID_ARGUMENT
+      - UNAUTHENTICATED
+      - PERMISSION_DENIED
+      - NOT_FOUND
+      - ALREADY_EXISTS
+      - LIMIT_EXCEEDED
+      - UNAVAILABLE
+      - UNKNOWN_ERROR
+      - NETWORK_ERROR
+      - INVALID_CERT
+      - NOT_SUPPORTED
+      - DATA_CORRUPTED
+      title: |-
+        *
+        接口的响应状态码定义遵循的规则，必须包含以下4个说明：
+        1、编码
+        2、编号
+        3、含义
+        4、使用场景
+      type: string
+    commonResponseStatus:
+      example:
+        code: RESPONSE_CODE_UNKNOWN
+        message: message
+      properties:
+        code:
+          $ref: "#/components/schemas/commonResponseCodeEnum"
+        message:
+          title: 可读的消息
+          type: string
+      title: commonResponseStatus
+      type: object
+    protobufAny:
+      additionalProperties: {}
+      example:
+        '@type': '@type'
+      properties:
+        '@type':
+          type: string
+      title: protobufAny
+      type: object
+    rpcStatus:
+      example:
+        code: 6
+        details:
+        - '@type': '@type'
+        - '@type': '@type'
+        message: message
+      properties:
+        code:
+          format: int32
+          title: code
+          type: integer
+        message:
+          title: message
+          type: string
+        details:
+          items:
+            $ref: "#/components/schemas/protobufAny"
+          title: details
+          type: array
+      title: rpcStatus
+      type: object

@@ -37,6 +37,7 @@ services:
       # DigitalHub Configuration
       - PUBLIC_HOST=your_public_host_here
       - LLM_PORT=8011
+      - JWT_SECRET=e802e988a02546cc47415e4bc76346aae7ceece97a0f950319c861a5de38b20d
     restart: unless-stopped
     networks:
       - interviewer-network
