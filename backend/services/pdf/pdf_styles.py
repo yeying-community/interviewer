@@ -3,6 +3,7 @@ PDF样式和字体配置
 负责PDF文档的样式定义和字体设置
 """
 
+import os
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.colors import HexColor
@@ -23,30 +24,40 @@ class PDFStyleManager:
     def _setup_fonts(self) -> str:
         """
         设置中文字体支持
+        使用项目内置的思源黑体字体,确保跨平台一致性
 
         Returns:
             可用的字体名称
         """
-        # 默认字体
-        default_font = 'Helvetica'
+        # 获取字体文件目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        fonts_dir = os.path.join(current_dir, 'fonts')
 
-        # 尝试注册中文字体（按优先级）
-        font_attempts = [
-            ('STHeiti', '/System/Library/Fonts/STHeiti Light.ttc'),
-            ('SimSun', '/System/Library/Fonts/SimSun.ttf'),
-            ('PingFang', '/System/Library/Fonts/PingFang.ttc'),
-        ]
+        # 注册常规字体
+        regular_font_path = os.path.join(fonts_dir, 'NotoSansSC-Regular.ttf')
+        bold_font_path = os.path.join(fonts_dir, 'NotoSansSC-Bold.ttf')
 
-        for font_name, font_path in font_attempts:
-            try:
-                pdfmetrics.registerFont(TTFont(font_name, font_path))
-                logger.info(f"Successfully registered {font_name} font")
-                return font_name
-            except Exception as e:
-                logger.debug(f"Failed to register {font_name}: {e}")
+        try:
+            # 注册常规字体
+            if os.path.exists(regular_font_path):
+                pdfmetrics.registerFont(TTFont('NotoSansSC', regular_font_path))
+                logger.info(f"Successfully registered NotoSansSC font from {regular_font_path}")
+            else:
+                raise FileNotFoundError(f"Font file not found: {regular_font_path}")
 
-        logger.warning("No Chinese font found, using default Helvetica font")
-        return default_font
+            # 注册粗体字体
+            if os.path.exists(bold_font_path):
+                pdfmetrics.registerFont(TTFont('NotoSansSC-Bold', bold_font_path))
+                logger.info(f"Successfully registered NotoSansSC-Bold font from {bold_font_path}")
+            else:
+                logger.warning(f"Bold font file not found: {bold_font_path}")
+
+            return 'NotoSansSC'
+
+        except Exception as e:
+            logger.error(f"Failed to register bundled fonts: {e}", exc_info=True)
+            logger.warning("Falling back to default Helvetica font (Chinese characters may not display correctly)")
+            return 'Helvetica'
 
     def _create_styles(self):
         """
