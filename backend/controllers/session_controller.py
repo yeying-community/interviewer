@@ -4,6 +4,7 @@
 """
 
 import os
+from urllib.parse import urlparse, urlunparse
 from flask import Blueprint, render_template, redirect, url_for
 from backend.services.interview_service import SessionService, RoundService
 from backend.clients.digitalhub_client import boot_dh
@@ -14,6 +15,9 @@ logger = get_logger(__name__)
 
 # 创建蓝图
 session_bp = Blueprint('session', __name__)
+
+DEFAULT_PUBLIC_HOST = "vtuber.yeying.pub"
+PLACEHOLDER_HOSTS = {"your_public_host_here", "your-public-host"}
 
 
 @session_bp.route('/create_session/<room_id>')
@@ -26,7 +30,7 @@ def create_session(room_id):
         return """
         <html>
         <head>
-            <meta charset="UTF-8">
+            <meta charset=\"UTF-8\">
             <script>
                 alert('请先上传简历后再创建面试会话！');
                 window.history.back();
@@ -76,13 +80,57 @@ def session_detail(session_id):
 
 # ==================== 私有辅助函数 ====================
 
+def _resolve_public_host() -> str:
+    """Return a usable public host, avoiding placeholder defaults."""
+    env_host = os.getenv("PUBLIC_HOST")
+    if env_host and env_host.lower() not in PLACEHOLDER_HOSTS:
+        return env_host
+    return DEFAULT_PUBLIC_HOST
+
+
+def _normalize_connect_url(connect_url: str | None, public_host: str) -> str | None:
+    """Ensure connect_url uses the expected public host instead of placeholders."""
+    if not connect_url:
+        return None
+
+    parsed = urlparse(connect_url)
+    if parsed.netloc and parsed.netloc.lower() not in PLACEHOLDER_HOSTS:
+        return connect_url
+
+    scheme = parsed.scheme or "https"
+    path = parsed.path or ""
+    return urlunparse((scheme, public_host, path, "", "", ""))
+
+
+def _normalize_dh_message(message: str | None, raw_connect_url: str | None,
+                         normalized_connect_url: str | None, public_host: str) -> str | None:
+    """Replace placeholder hosts in DH boot message so the user sees a real link."""
+    if not message:
+        return None
+
+    updated_message = message
+
+    if raw_connect_url and normalized_connect_url and raw_connect_url != normalized_connect_url:
+        updated_message = updated_message.replace(raw_connect_url, normalized_connect_url)
+
+    for placeholder in PLACEHOLDER_HOSTS:
+        if placeholder in updated_message:
+            updated_message = updated_message.replace(placeholder, public_host)
+
+    return updated_message
+
+
 def _boot_digital_human(session):
     """启动数字人服务"""
     try:
-        public_host = os.getenv("PUBLIC_HOST")
+        public_host = _resolve_public_host()
         resp = boot_dh(session.room_id, session.id, public_host=public_host)
-        dh_message = (resp.get("data") or {}).get("message")
-        dh_connect_url = (resp.get("data") or {}).get("connect_url")
+        data = resp.get("data") or {}
+
+        raw_connect_url = data.get("connect_url")
+        dh_connect_url = _normalize_connect_url(raw_connect_url, public_host)
+        dh_message = _normalize_dh_message(data.get("message"), raw_connect_url,
+                                          dh_connect_url, public_host)
         return dh_message, dh_connect_url
     except Exception as e:
         logger.warning(f"Failed to boot digital human for session {session.id}: {e}")
